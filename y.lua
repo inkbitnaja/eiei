@@ -9,7 +9,7 @@ _G.HostName = {
     ["Kaputpappa734"] = "French Fry Ferret",
     ["Mowenibara890"] = "Spaghetti Sloth",
     ["Latiljabro65041"] = "Corrupted Kitsune",
-    ["Emerlanz31472"] = "Dragonfly",
+    ["Huyomo884"] = "Dragonfly",
     ["Smockhoy28125"] = "Mimic Octopus",
 }
 
