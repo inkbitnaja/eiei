@@ -135,16 +135,19 @@ local function checkPlayerCountAndStartTimer()
     if isAutoHop and not isHopping then
         -- 🚀 ถ้าเต็ม 5 คน = Hop ทันที!
         if currentPlayers >= 5 then
-            print("🚀 เซิร์ฟเต็ม 5 คน - Hop ทันที!")
+            print("🚀 เซิร์ฟเต็ม 5 คน - เริ่ม Hop ทันที!")
             
             pcall(function()
                 StarterGui:SetCore("ChatMakeSystemMessage", {
-                    Text = "🚀 เซิร์ฟเต็ม 5 คน - Hop ทันที!";
+                    Text = "🚀 เซิร์ฟเต็ม 5 คน - เริ่ม Hop ทันที!";
                     Color = Color3.fromRGB(255, 50, 50);
                 })
             end)
             
-            executeAutoHop()
+            -- เรียกใช้ task.spawn เพื่อให้ทำงานแยกจาก loop หลัก
+            task.spawn(function()
+                executeAutoHop()
+            end)
             
         -- ⏰ ถ้าคนเกิน maxPlayersBeforeHop (4 คน) แต่ยังไม่เต็ม 5 - เริ่มนับเวลา
         elseif currentPlayers > maxPlayersBeforeHop then
@@ -166,43 +169,64 @@ end
 
 -- ฟังก์ชัน Hop เมื่อครบเวลา
 local function executeAutoHop()
-    if isHopping then return end
+    if isHopping then 
+        print("⚠️ กำลัง Hop อยู่แล้ว")
+        return 
+    end
     
     local currentPlayers = #Players:GetPlayers()
     
-    if currentPlayers >= 5 then
-        print("🚀 เซิร์ฟเต็ม 5 คน - เริ่ม Auto Hop ทันที")
-        statusLabel.Text = "เซิร์ฟเต็ม - กำลัง Hop ทันที"
-    else
-        print("🚀 ครบเวลาแล้ว - เริ่ม Auto Hop")
-        statusLabel.Text = "ครบเวลาแล้ว - กำลัง Hop"
-    end
+    print("🚀 เริ่มกระบวนการ Auto Hop")
     
-    pcall(function()
-        StarterGui:SetCore("ChatMakeSystemMessage", {
-            Text = "🚀 กำลัง Hop หาเซิร์ฟคนน้อย (2-3 คน)";
-            Color = Color3.fromRGB(255, 100, 100);
-        })
-    end)
+    if currentPlayers >= 5 then
+        print("🚀 สาเหตุ: เซิร์ฟเต็ม 5 คน - เริ่ม Auto Hop ทันที")
+        statusLabel.Text = "เซิร์ฟเต็ม - กำลัง Hop ทันที"
+        
+        pcall(function()
+            StarterGui:SetCore("ChatMakeSystemMessage", {
+                Text = "🚀 กำลัง Hop หาเซิร์ฟคนน้อย (2-3 คน) - เซิร์ฟเต็ม!";
+                Color = Color3.fromRGB(255, 50, 50);
+            })
+        end)
+    else
+        print("🚀 สาเหตุ: ครบเวลาแล้ว - เริ่ม Auto Hop")
+        statusLabel.Text = "ครบเวลาแล้ว - กำลัง Hop"
+        
+        pcall(function()
+            StarterGui:SetCore("ChatMakeSystemMessage", {
+                Text = "🚀 กำลัง Hop หาเซิร์ฟคนน้อย (2-3 คน) - ครบเวลา!";
+                Color = Color3.fromRGB(255, 100, 100);
+            })
+        end)
+    end
     
     isHopping = true
     isWaitingToHop = false
     timeWhenExceeded = nil
-    timerLabel.Text = ""
+    timerLabel.Text = "🚀 กำลัง Hop..."
     hopButton.Text = "⏳ กำลัง Hop..."
     
+    -- ใช้ task.spawn เพื่อไม่ให้บล็อค loop หลัก
     task.spawn(function()
+        print("🔍 เริ่มค้นหาเซิร์ฟเวอร์...")
         local serverId = findGoodServer()
+        
         if serverId then
+            print("✅ พบเซิร์ฟเวอร์เป้าหมาย - เริ่ม Teleport")
             local success = safeTeleport(serverId)
+            
             if not success then
+                print("❌ Teleport ล้มเหลว")
                 task.wait(3)
                 statusLabel.Text = "Hop ล้มเหลว - ลองใหม่"
+                timerLabel.Text = ""
                 isHopping = false
                 hopButton.Text = "🚀 Hop ทันที"
             end
         else
+            print("❌ ไม่พบเซิร์ฟเวอร์เหมาะสม")
             statusLabel.Text = "ไม่พบเซิร์ฟเหมาะสม"
+            timerLabel.Text = ""
             task.wait(30) -- รอ 30 วินาทีก่อนลองใหม่
             isHopping = false
             hopButton.Text = "🚀 Hop ทันที"
@@ -440,7 +464,10 @@ task.spawn(function()
             local timeLeft = waitTimeBeforeHop - timeElapsed
             
             if timeLeft <= 0 then
-                executeAutoHop()
+                print("⏰ ครบเวลา " .. waitTimeBeforeHop .. " วินาทีแล้ว - เริ่ม Auto Hop")
+                task.spawn(function()
+                    executeAutoHop()
+                end)
             else
                 timerLabel.Text = "⏰ Hop ใน " .. math.ceil(timeLeft) .. " วินาที"
             end
@@ -453,9 +480,16 @@ Players.PlayerAdded:Connect(function(newPlayer)
     local newCount = #Players:GetPlayers()
     print("➕ " .. newPlayer.Name .. " เข้าเกม (รวม " .. newCount .. " คน)")
     
-    -- ตรวจสอบทันทีเมื่อมีคนเข้า
+    -- ตรวจสอบทันทีเมื่อมีคนเข้า - อาจ Hop ทันทีถ้าเต็ม!
     task.wait(0.5)
-    checkPlayerCountAndStartTimer()
+    if newCount >= 5 and isAutoHop and not isHopping then
+        print("🚀 ตรวจพบเซิร์ฟเต็ม 5 คนจากคนเข้าใหม่!")
+        task.spawn(function()
+            checkPlayerCountAndStartTimer()
+        end)
+    else
+        checkPlayerCountAndStartTimer()
+    end
 end)
 
 Players.PlayerRemoving:Connect(function(leftPlayer)
