@@ -3,7 +3,7 @@ repeat wait() until game:GetService("Players")
 repeat wait() until game:GetService("Players").LocalPlayer
 repeat wait() until game:GetService("Players").LocalPlayer.PlayerGui
 
-_G.UserKey = "1"
+_G.UserKey = "venoz"
 _G.HostName = {
     ["Kinasramer08074"] = "Capybara",
     ["Odemsficek078"] = "Capybara",
