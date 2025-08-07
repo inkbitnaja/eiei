@@ -10,6 +10,7 @@ _G.HostName = {
     ["Faconzelen34784"] = "Capybara",
     ["Fardzubi57714"] = "Capybara",
     ["Kathipallo865"] = "Capybara",
+    ["Supkoranne9833"] = "Capybara",
 }
 
 _G.SelectPetForTrade = {
