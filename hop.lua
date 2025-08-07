@@ -427,9 +427,52 @@ end)
 -- Loop หลักที่ตรวจสอบทุกอย่าง
 task.spawn(function()
     while true do
-        task.wait(playerCountCheckInterval) -- ตรวจสอบทุก 5 วินาที
+        task.wait(2) -- ตรวจสอบทุก 2 วินาที (เร็วขึ้น)
         
         local currentPlayers = #Players:GetPlayers()
+        
+        -- 🚀 ตรวจสอบการ Hop ทันทีถ้าเต็ม 5 คน
+        if isAutoHop and not isHopping and currentPlayers >= 5 then
+            print("🔥 FORCE HOP: ตรวจพบเซิร์ฟเต็ม " .. currentPlayers .. " คน - เริ่ม Hop ทันที!")
+            
+            pcall(function()
+                StarterGui:SetCore("ChatMakeSystemMessage", {
+                    Text = "🔥 FORCE HOP: เซิร์ฟเต็ม " .. currentPlayers .. " คน!";
+                    Color = Color3.fromRGB(255, 0, 0);
+                })
+            end)
+            
+            isHopping = true
+            statusLabel.Text = "🔥 เซิร์ฟเต็ม - Hop ทันที!"
+            timerLabel.Text = "🚀 กำลัง Hop..."
+            hopButton.Text = "⏳ กำลัง Hop..."
+            
+            task.spawn(function()
+                print("🔍 เริ่มค้นหาเซิร์ฟเวอร์...")
+                local serverId = findGoodServer()
+                
+                if serverId then
+                    print("✅ พบเซิร์ฟเวอร์เป้าหมาย - เริ่ม Teleport")
+                    local success = safeTeleport(serverId)
+                    
+                    if not success then
+                        print("❌ Teleport ล้มเหลว")
+                        task.wait(3)
+                        statusLabel.Text = "Hop ล้มเหลว - ลองใหม่"
+                        timerLabel.Text = ""
+                        isHopping = false
+                        hopButton.Text = "🚀 Hop ทันที"
+                    end
+                else
+                    print("❌ ไม่พบเซิร์ฟเวอร์เหมาะสม")
+                    statusLabel.Text = "ไม่พบเซิร์ฟเหมาะสม"
+                    timerLabel.Text = ""
+                    task.wait(10) -- รอ 10 วินาทีก่อนลองใหม่
+                    isHopping = false
+                    hopButton.Text = "🚀 Hop ทันที"
+                end
+            end)
+        end
         
         -- อัพเดตข้อมูลเซิร์ฟเวอร์ พร้อมแสดงสถานะ
         if not isHopping then
@@ -455,8 +498,10 @@ task.spawn(function()
             end
         end
         
-        -- ตรวจสอบและเริ่มนับเวลา หรือ Hop ทันที
-        checkPlayerCountAndStartTimer()
+        -- ตรวจสอบและเริ่มนับเวลา (สำหรับกรณี 4 คน)
+        if not isHopping then
+            checkPlayerCountAndStartTimer()
+        end
         
         -- ตรวจสอบว่าครบเวลาหรือยัง
         if isWaitingToHop and timeWhenExceeded then
@@ -471,6 +516,11 @@ task.spawn(function()
             else
                 timerLabel.Text = "⏰ Hop ใน " .. math.ceil(timeLeft) .. " วินาที"
             end
+        end
+        
+        -- Debug: แสดงสถานะปัจจุบัน
+        if currentPlayers >= 5 then
+            print("🔍 DEBUG: ผู้เล่น=" .. currentPlayers .. " | AutoHop=" .. tostring(isAutoHop) .. " | กำลัง Hop=" .. tostring(isHopping))
         end
     end
 end)
