@@ -3,7 +3,7 @@
 getgenv().Config = {
     Recipients = { -- Список получателей для трейда
         "Daanefida910",
-        "Semracaras53548"
+        "Semracaras53548",
     },
     PetsToTrade = { -- Список питомцев для трейда
         "Lobster Thermidor",
