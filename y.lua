@@ -19,7 +19,7 @@ getgenv().Config = {
     MaxPetsPerAccount = 55, -- Максимальное количество питомцев на аккаунт
     TradeTimeout = 300, -- Таймаут трейда в секундах (5 минут)
     ServerSelectionTimeout = 30, -- Таймаут выбора сервера в секундах
-    AutoRejoinOnVipServer = true, -- Автоматически переходить с VIP серверов
+    AutoRejoinOnVipServer = false, -- Автоматически переходить с VIP серверов
     QueueCheckInterval = 30 -- Интервал проверки очереди в секундах
 }
 
