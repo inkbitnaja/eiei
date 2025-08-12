@@ -1125,8 +1125,12 @@ local function AutoTrade()
             end
 
             -- 3. รอให้เกมโหลดทันหลังจากวาร์ป
-            AddMessage("รอโหลดเซิร์ฟเวอร์หลังวาร์ป...", "info")
-            task.wait(10) -- เพิ่มการรอที่จำเป็น
+            AddMessage("รอโหลดเซิร์ฟเวอร์และตัวละครหลังวาร์ป...", "info")
+            if not LocalPlayer.Character then
+                LocalPlayer.CharacterAdded:Wait() -- จะรอจนกว่าตัวละครของผู้ส่งจะเกิดในเซิร์ฟเวอร์ใหม่
+            end
+            task.wait(2) -- อาจจะรอเพิ่มอีกนิดหน่อยเผื่อกรณีฉุกเฉิน
+            AddMessage("ตัวละครโหลดเสร็จสิ้น! เริ่มค้นหาผู้รับ...", "success") -- เพิ่มการรอที่จำเป็น
         else
             -- 4. ถ้าอยู่เซิร์ฟเดียวกันแล้ว ก็แค่แจ้งสถานะ ไม่ต้องวาร์ป
             AddMessage("อยู่เซิร์ฟเดียวกับเป้าหมายแล้ว เริ่มค้นหา...", "success")
@@ -1139,7 +1143,7 @@ local function AutoTrade()
         local maxWaitTime = getgenv().Config.ServerSelectionTimeout
         
         while tick() - startTime < maxWaitTime do
-            task.wait(2)
+            task.wait(0.5)
             
             if not LocalPlayer or not LocalPlayer.Character then
                 AddMessage("Потеря соединения во время ожидания, завершение...", "error")
