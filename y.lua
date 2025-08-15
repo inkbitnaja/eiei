@@ -553,7 +553,7 @@ local function ScoreServer(entry, minFreeSlots, preferLowerPopulation, avoidNear
     return score
 end
 
-local function FindBestPublicServer(placeId)
+local function FindBestPublicServer(placeId, excludeServers)
     if not getgenv().Config.SmartServerSearch then return nil end
 
     local minFree = getgenv().Config.MinFreeSlots or 2
@@ -564,14 +564,22 @@ local function FindBestPublicServer(placeId)
     local bestEntry = nil
     local bestScore = -math.huge
     local cursor = nil
+    
+    -- Создаем Set для быстрого поиска исключенных серверов
+    local excludeSet = {}
+    if excludeServers then
+        for _, serverId in ipairs(excludeServers) do
+            excludeSet[serverId] = true
+        end
+    end
 
     for page = 1, pages do
         local pageData = FetchPublicServersPage(placeId, cursor)
         if not pageData then break end
 
         for _, entry in ipairs(pageData.data or {}) do
-            -- пропускаем текущий сервер
-            if entry.id ~= game.JobId then
+            -- пропускаем текущий сервер и исключенные серверы
+            if entry.id ~= game.JobId and not excludeSet[entry.id] then
                 local score = ScoreServer(entry, minFree, preferLow, avoidThreshold)
                 if score and score > bestScore then
                     bestScore = score
@@ -594,23 +602,49 @@ local function FindBestPublicServer(placeId)
     return bestEntry
 end
 
-local function TeleportReceiverToSmartServer()
+local function TeleportReceiverToSmartServer(excludeCurrentServer)
     local placeId = 126884695634066
-    local best = FindBestPublicServer(placeId)
-    if not best then
-        AddMessage("Smart search: подходящий сервер не найден", "warning")
+    
+    -- Проверяем кулдаун между телепортами
+    local currentTime = tick() * 1000
+    if currentTime - getgenv().LastTeleportTime < getgenv().TeleportCooldown then
+        local remainingTime = math.ceil((getgenv().TeleportCooldown - (currentTime - getgenv().LastTeleportTime)) / 1000)
+        AddMessage("Smart search: ждем кулдаун телепорта (" .. remainingTime .. " сек)", "warning")
         return false
     end
+    
+    -- Добавляем текущий сервер в исключения, если нужно
+    local excludeServers = excludeCurrentServer and {game.JobId} or {}
+    -- Добавляем уже исключенные серверы
+    for serverId, _ in pairs(getgenv().ExcludedServers) do
+        table.insert(excludeServers, serverId)
+    end
+    
+    local best = FindBestPublicServer(placeId, excludeServers)
+    if not best then
+        AddMessage("Smart search: подходящий сервер не найден (исключено: " .. #excludeServers .. " серверов)", "warning")
+        return false
+    end
+    
     local pingInfo = best.ping and (", ping=" .. tostring(best.ping) .. "ms") or ""
     AddMessage("Smart search: найден сервер " .. tostring(best.id) .. " (" .. tostring(best.playing) .. "/" .. tostring(best.maxPlayers) .. ")" .. pingInfo, "info")
+    
+    -- Обновляем время последнего телепорта
+    getgenv().LastTeleportTime = currentTime
+    
     local ok, err = pcall(function()
         TeleportService:TeleportToPlaceInstance(placeId, best.id)
     end)
+    
     if ok then
         AddMessage("Smart search: телепорт выполнен", "success")
+        -- Сбрасываем счетчик попыток при успешном телепорте
+        getgenv().TeleportRetryCount = 0
         return true
     else
         AddMessage("Smart search: ошибка телепорта: " .. tostring(err), "error")
+        -- Добавляем сервер в исключения
+        getgenv().ExcludedServers[best.id] = true
         return false
     end
 end
@@ -676,7 +710,7 @@ local function RejoinNormalServer()
     
     -- Только умный поиск, без стандартного Teleport
     if getgenv().Config.SmartServerSearch then
-        local smartOk = TeleportReceiverToSmartServer()
+        local smartOk = TeleportReceiverToSmartServer(true) -- Исключаем текущий сервер
         if smartOk then
             return true
         else
@@ -685,6 +719,55 @@ local function RejoinNormalServer()
         end
     else
         AddMessage("Smart Server Search отключен — переход отменен", "warning")
+        return false
+    end
+end
+
+-- Функция для повторных телепортов при ошибках
+local function RetryTeleportToNormalServer()
+    local placeId = 126884695634066 -- ID игры GAG
+    
+    -- Проверяем, являемся ли мы получателем
+    local isReceiver = false
+    for _, username in pairs(getgenv().Config.Recipients) do
+        if username == LocalPlayer.Name then
+            isReceiver = true
+            break
+        end
+    end
+    
+    if not isReceiver then
+        AddMessage("Отправители не используют повторные телепорты", "info")
+        return false
+    end
+    
+    -- Увеличиваем счетчик попыток
+    getgenv().TeleportRetryCount = getgenv().TeleportRetryCount + 1
+    
+    if getgenv().TeleportRetryCount > getgenv().MaxTeleportRetries then
+        AddMessage("Превышен лимит попыток телепорта (" .. getgenv().MaxTeleportRetries .. "). Ожидание 2 минуты...", "error")
+        -- Сбрасываем счетчик и исключенные серверы через 2 минуты
+        task.spawn(function()
+            task.wait(120)
+            getgenv().TeleportRetryCount = 0
+            getgenv().ExcludedServers = {}
+            AddMessage("Система телепортов сброшена, можно попробовать снова", "success")
+        end)
+        return false
+    end
+    
+    AddMessage("Повторная попытка телепорта #" .. getgenv().TeleportRetryCount .. "/" .. getgenv().MaxTeleportRetries, "warning")
+    
+    if getgenv().Config.SmartServerSearch then
+        local smartOk = TeleportReceiverToSmartServer(true) -- Исключаем текущий сервер
+        if smartOk then
+            return true
+        else
+            AddMessage("Повторная попытка не удалась, будет следующая через 15 секунд", "warning")
+            return false
+        end
+    else
+        AddMessage("Smart Server Search отключен — повторная попытка отменена", "warning")
         return false
     end
 end
@@ -799,6 +882,13 @@ end
 -- Variable to track last used receiver
 getgenv().LastUsedReceiverIndex = getgenv().LastUsedReceiverIndex or 0
 
+-- Variables for retry teleport system
+getgenv().TeleportRetryCount = getgenv().TeleportRetryCount or 0
+getgenv().MaxTeleportRetries = getgenv().MaxTeleportRetries or 5555
+getgenv().ExcludedServers = getgenv().ExcludedServers or {}
+getgenv().LastTeleportTime = getgenv().LastTeleportTime or 0
+getgenv().TeleportCooldown = getgenv().TeleportCooldown or 10000 -- 10 seconds
+
 -- Function to send Discord notification
 local function SendDiscordNotification(message, color)
     if not getgenv().Config.DiscordNotifications or not getgenv().Config.DiscordWebhook or getgenv().Config.DiscordWebhook == "" then
@@ -893,7 +983,7 @@ local function CheckReceiversViaBackend()
     end
     
     local usernames = table.concat(getgenv().Config.Recipients, ",")
-    local url = getgenv().Config.BackendURL .. "/api/check-receivers?usernames=" .. usernames
+    local url = getgenv().Config.BackendURL .. "/api/check-receivers?usernames=" .. usernames .. "&includeQueueInfo=true"
     
     local response = MakeHttpRequest(url, "GET")
     if response and response.success and response.availableReceivers and #response.availableReceivers > 0 then
@@ -921,7 +1011,18 @@ local function CheckReceiversViaBackend()
         
         local selectedReceiver = list[getgenv().LastUsedReceiverIndex]
         
-        AddMessage("Selected receiver " .. getgenv().LastUsedReceiverIndex .. " of " .. availableCount .. ": " .. selectedReceiver.username, "info")
+        -- Показываем дополнительную информацию об очереди
+        if selectedReceiver.queueInfo then
+            AddMessage("Selected receiver " .. getgenv().LastUsedReceiverIndex .. " of " .. availableCount .. ": " .. selectedReceiver.username, "info")
+            if selectedReceiver.queueInfo.hasReservation then
+                AddMessage("Receiver has active reservation with: " .. selectedReceiver.queueInfo.currentReservation.sender, "info")
+            end
+            if selectedReceiver.queueInfo.queueLength > 0 then
+                AddMessage("Queue length: " .. selectedReceiver.queueInfo.queueLength, "info")
+            end
+        else
+            AddMessage("Selected receiver " .. getgenv().LastUsedReceiverIndex .. " of " .. availableCount .. ": " .. selectedReceiver.username, "info")
+        end
         
         return selectedReceiver
     end
@@ -969,7 +1070,7 @@ local function TeleportToReceiver(receiverData)
     end
 end
 
--- Очередь: запрос резервации для отправителя
+-- Очередь: запрос резервации для отправителя (улучшенная версия)
 local function RequestQueueReservation()
     if not getgenv().Config.UseBackend then return nil end
 
@@ -981,33 +1082,58 @@ local function RequestQueueReservation()
             break
         end
     end
-    if isReceiver then return nil end
+    if (isReceiver) then return nil end
 
     -- Если нет питомцев — выходим
     if not HasPetsForTrade() then return nil end
 
     local url = getgenv().Config.BackendURL .. "/api/queue/request"
-    local body = { sender = LocalPlayer.Name, receivers = getgenv().Config.Recipients }
+    
+    -- Улучшенные данные для очереди
+    local body = { 
+        sender = LocalPlayer.Name, 
+        receivers = getgenv().Config.Recipients,
+        priority = 1, -- Базовый приоритет для отправителей
+        metadata = {
+            petsCount = GetPetsCountInInventory(),
+            serverType = IsVipServer() and "vip" or "public",
+            hasTradePets = HasPetsForTrade(),
+            timestamp = tick()
+        }
+    }
+    
     local resp = MakeHttpRequest(url, "POST", body)
     if not resp or not resp.success then return nil end
+    
     if resp.reserved then
-        AddMessage("Queue: reserved receiver " .. resp.reserved.receiver .. ", pos=1", "success")
-        return { username = resp.reserved.receiver, serverId = resp.reserved.serverId, jobId = resp.reserved.jobId }
+        AddMessage("Queue: reserved receiver " .. resp.reserved.receiver .. ", pos=1, priority=" .. (resp.reserved.priority or 1), "success")
+        return { 
+            username = resp.reserved.receiver, 
+            serverId = resp.reserved.serverId, 
+            jobId = resp.reserved.jobId,
+            priority = resp.reserved.priority or 1
+        }
     elseif resp.queued then
-        AddMessage("Queue: queued for receiver " .. resp.queued.receiver .. ", position " .. tostring(resp.queued.position), "info")
+        AddMessage("Queue: queued for receiver " .. resp.queued.receiver .. ", position " .. tostring(resp.queued.position) .. ", priority=" .. (resp.queued.priority or 1), "info")
         return nil
     end
     return nil
 end
 
--- Очередь: освободить резервацию (вызывать после завершения или отказа)
-local function ReleaseQueueReservation(receiverUsername)
+-- Очередь: освободить резервацию (улучшенная версия)
+local function ReleaseQueueReservation(receiverUsername, reason)
     if not getgenv().Config.UseBackend or not receiverUsername then return end
+    
     local url = getgenv().Config.BackendURL .. "/api/queue/release"
-    local body = { sender = LocalPlayer.Name, receiver = receiverUsername }
+    local body = { 
+        sender = LocalPlayer.Name, 
+        receiver = receiverUsername,
+        reason = reason or "completed" -- Причина освобождения резервации
+    }
+    
     local resp = MakeHttpRequest(url, "POST", body)
     if resp and resp.success then
-        AddMessage("Queue: reservation released for receiver " .. receiverUsername, "info")
+        AddMessage("Queue: reservation released for receiver " .. receiverUsername .. " (reason: " .. (reason or "completed") .. ")", "info")
     end
 end
 
@@ -1136,13 +1262,19 @@ local function RegisterAsReceiver()
     end
     
     local username = LocalPlayer.Name
-    local jobId = "job-" .. username .. "-" .. tostring(tick())
     local serverId = game.JobId
     
+    -- Новый формат: не передаем jobId, бэкенд сам генерирует
     local data = {
         receiver = username,
-        jobId = jobId,
-        serverId = serverId
+        serverId = serverId,
+        priority = 1, -- Базовый приоритет для получателей
+        metadata = {
+            inventoryCount = GetPetsCountInInventory(),
+            serverType = IsVipServer() and "vip" or "public",
+            playerCount = #game.Players:GetPlayers(),
+            maxPlayers = game.Players.MaxPlayers
+        }
     }
     
     local url = getgenv().Config.BackendURL .. "/api/register-job"
@@ -1150,11 +1282,12 @@ local function RegisterAsReceiver()
     
     if response and response.success then
         AddMessage("Registered as receiver in backend", "success")
-        AddMessage("Job ID: " .. jobId, "info")
+        AddMessage("Job ID: " .. response.jobId, "info")
         AddMessage("Server ID: " .. serverId, "info")
+        AddMessage("Priority: " .. (response.priority or 1), "info")
         
         -- Save jobId for later deletion
-        getgenv().CurrentJobId = jobId
+        getgenv().CurrentJobId = response.jobId
         return true
     else
         AddMessage("Backend registration error", "error")
@@ -1227,7 +1360,15 @@ local function UpdateReceiverStatus()
     
     local data = {
         receiver = username,
-        serverId = serverId
+        serverId = serverId,
+        status = 'active',
+        metadata = {
+            inventoryCount = GetPetsCountInInventory(),
+            serverType = IsVipServer() and "vip" or "public",
+            playerCount = #game.Players:GetPlayers(),
+            maxPlayers = game.Players.MaxPlayers,
+            lastUpdate = tick()
+        }
     }
     
     local url = getgenv().Config.BackendURL .. "/api/update-receiver"
@@ -1242,7 +1383,165 @@ local function UpdateReceiverStatus()
     end
 end
 
--- Main auto trade function
+-- Функция для завершения job через бэкенд
+local function CompleteJob(jobId, metadata)
+    if not getgenv().Config.UseBackend or not jobId then return end
+    
+    local url = getgenv().Config.BackendURL .. "/api/complete-job"
+    local data = {
+        jobId = jobId,
+        metadata = metadata or {
+            completedBy = LocalPlayer.Name,
+            completedAt = tick(),
+            reason = "trade_completed"
+        }
+    }
+    
+    local response = MakeHttpRequest(url, "POST", data)
+    if response and response.success then
+        AddMessage("Job " .. jobId .. " marked as completed", "success")
+        return true
+    else
+        AddMessage("Failed to complete job " .. jobId, "error")
+        return false
+    end
+end
+
+-- Функция для получения детальной информации об аккаунте
+local function GetAccountDetails(username)
+    if not getgenv().Config.UseBackend or not username then return nil end
+    
+    local url = getgenv().Config.BackendURL .. "/api/accounts/" .. username .. "?includeHistory=true"
+    local response = MakeHttpRequest(url, "GET")
+    
+    if response and response.success then
+        return response.account
+    else
+        AddMessage("Failed to get account details for " .. username, "error")
+        return nil
+    end
+end
+
+-- Функция для обновления статуса аккаунта
+local function UpdateAccountStatus(username, status, reason)
+    if not getgenv().Config.UseBackend or not username or not status then return false end
+    
+    local url = getgenv().Config.BackendURL .. "/api/accounts/" .. username .. "/status"
+    local data = {
+        status = status,
+        reason = reason or "User request",
+        metadata = {
+            updatedBy = LocalPlayer.Name,
+            updatedAt = tick()
+        }
+    }
+    
+    local response = MakeHttpRequest(url, "PUT", data)
+    if response and response.success then
+        AddMessage("Account " .. username .. " status updated to " .. status, "success")
+        return true
+    else
+        AddMessage("Failed to update account " .. username .. " status", "error")
+        return false
+    end
+end
+
+-- Функция для получения статистики системы
+local function GetSystemStats()
+    if not getgenv().Config.UseBackend then return nil end
+    
+    local url = getgenv().Config.BackendURL .. "/api/stats/extended"
+    local response = MakeHttpRequest(url, "GET")
+    
+    if response and response.success then
+        return response.stats
+    else
+        AddMessage("Failed to get system stats", "error")
+        return nil
+    end
+end
+
+-- Функция для записи трейда в историю
+local function RecordTrade(receiver, petsCount, serverId)
+    if not getgenv().Config.UseBackend or not receiver or not petsCount then return false end
+    
+    local url = getgenv().Config.BackendURL .. "/api/trade/record"
+    local data = {
+        receiver = receiver,
+        sender = LocalPlayer.Name,
+        petsCount = petsCount,
+        serverId = serverId or game.JobId
+    }
+    
+    local response = MakeHttpRequest(url, "POST", data)
+    if response and response.success then
+        AddMessage("Trade recorded: " .. petsCount .. " pets to " .. receiver, "success")
+        return true
+    else
+        AddMessage("Failed to record trade", "error")
+        return false
+    end
+end
+
+-- Функция для обновления статуса получателя
+local function UpdateReceiverStatus(inventoryCount, onlineStatus)
+    if not getgenv().Config.UseBackend then return false end
+    
+    -- Проверяем, являемся ли мы получателем
+    local isReceiver = false
+    for _, username in pairs(getgenv().Config.Recipients) do
+        if username == LocalPlayer.Name then
+            isReceiver = true
+            break
+        end
+    end
+    
+    if not isReceiver then return false end
+    
+    local url = getgenv().Config.BackendURL .. "/api/receiver/update-status"
+    local data = {
+        receiver = LocalPlayer.Name,
+        inventoryCount = inventoryCount or GetPetsCountInInventory(),
+        onlineStatus = onlineStatus or "online"
+    }
+    
+    local response = MakeHttpRequest(url, "POST", data)
+    if response and response.success then
+        AddMessage("Receiver status updated: " .. (inventoryCount or GetPetsCountInInventory()) .. " pets, " .. (onlineStatus or "online"), "info")
+        return true
+    else
+        AddMessage("Failed to update receiver status", "error")
+        return false
+    end
+end
+
+-- Функция для поиска аккаунтов с фильтрами
+local function SearchAccounts(filters)
+    if not getgenv().Config.UseBackend then return nil end
+    
+    local url = getgenv().Config.BackendURL .. "/api/accounts/search"
+    local queryParams = {}
+    
+    for key, value in pairs(filters) do
+        if value and value ~= "" then
+            table.insert(queryParams, key .. "=" .. tostring(value))
+        end
+    end
+    
+    if #queryParams > 0 then
+        url = url .. "?" .. table.concat(queryParams, "&")
+    end
+    
+    local response = MakeHttpRequest(url, "GET")
+    if response and response.success then
+        return response
+    else
+        AddMessage("Failed to search accounts", "error")
+        return nil
+    end
+end
+
+-- Main auto trade function (улучшенная версия)
 local function AutoTrade()
     if not getgenv().Config.Enabled then
         return
@@ -1269,7 +1568,7 @@ local function AutoTrade()
         return
     end
     
-    -- 1) очередь/резервация через бэкенд
+    -- 1) очередь/резервация через бэкенд (улучшенная версия)
     local reserved = RequestQueueReservation()
     local targetPlayer = nil
     if reserved then
@@ -1282,6 +1581,7 @@ local function AutoTrade()
         -- 2) локальный поиск и обычная логика через /api/check-receivers
         targetPlayer = FindFirstAvailableRecipient()
     end
+    
     if targetPlayer then
         AddMessage("Found receiver: " .. targetPlayer.Name, "success")
     else
@@ -1388,9 +1688,17 @@ local function AutoTrade()
     
     if sentCount > 0 then
         AddMessage("Sent pets: " .. sentCount, "success")
-        -- освободить резервацию, если была
+        
+        -- Записываем трейд в историю
+        if targetPlayer then
+            RecordTrade(targetPlayer.Name, sentCount, game.JobId)
+        elseif reserved and reserved.username then
+            RecordTrade(reserved.username, sentCount, game.JobId)
+        end
+        
+        -- освободить резервацию, если была (улучшенная версия)
         if reserved and reserved.username then
-            ReleaseQueueReservation(reserved.username)
+            ReleaseQueueReservation(reserved.username, "trade_completed")
         end
         
         -- Check if we are sender
@@ -1409,6 +1717,11 @@ local function AutoTrade()
             LeaveServerAfterTrade()
         elseif not isReceiver and not getgenv().Config.LeaveServerAfterTrade then
             AddMessage("Sender: trade completed, staying on server (setting disabled)", "info")
+        end
+    else
+        -- Если не удалось отправить питомцев, освобождаем резервацию с причиной
+        if reserved and reserved.username then
+            ReleaseQueueReservation(reserved.username, "no_pets_sent")
         end
     end
 end
@@ -1443,7 +1756,17 @@ local function MainLoop()
                 -- Receivers move from VIP and full servers
                 if IsVipServer() then
                     AddMessage("Receiver: VIP server in main loop, moving...", "warning")
-                    RejoinNormalServer()
+                    local moveSuccess = RejoinNormalServer()
+                    if not moveSuccess then
+                        -- Если не удалось перейти, пробуем повторно через 15 секунд
+                        task.spawn(function()
+                            task.wait(15)
+                            if IsVipServer() then
+                                AddMessage("Receiver: автоматическая повторная попытка телепорта...", "warning")
+                                RetryTeleportToNormalServer()
+                            end
+                        end)
+                    end
                     task.wait(10) -- Wait longer after moving
                     shouldContinue = true
                 elseif IsServerFull() then
@@ -1500,22 +1823,34 @@ local function ReceiverLoop()
                     task.wait(60) -- Wait longer when overflowed
                     shouldContinue = true
                 else
-                    -- Only receivers check and move
-                    if IsVipServer() then
-                        AddMessage("Receiver: VIP server in receiver loop, moving...", "warning")
-                        RejoinNormalServer()
-                        task.wait(10)
-                        shouldContinue = true
-                    elseif IsServerFull() then
-                        AddMessage("Receiver: server is full in receiver loop, waiting on current server", "info")
-                        shouldContinue = true
+                                    -- Only receivers check and move
+                if IsVipServer() then
+                    AddMessage("Receiver: VIP server in receiver loop, moving...", "warning")
+                    local moveSuccess = RejoinNormalServer()
+                    if not moveSuccess then
+                        -- Если не удалось перейти, пробуем повторно через 15 секунд
+                        task.spawn(function()
+                            task.wait(15)
+                            if IsVipServer() then
+                                AddMessage("Receiver: автоматическая повторная попытка телепорта...", "warning")
+                                RetryTeleportToNormalServer()
+                            end
+                        end)
                     end
+                    task.wait(10)
+                    shouldContinue = true
+                elseif IsServerFull() then
+                    AddMessage("Receiver: server is full in receiver loop, waiting on current server", "info")
+                    shouldContinue = true
+                end
                 end
             end
         end
         
         if not shouldContinue and getgenv().Config.UseBackend then
-            UpdateReceiverStatus()
+            -- Обновляем статус получателя с информацией об инвентаре
+            local petsCount = GetPetsCountInInventory()
+            UpdateReceiverStatus(petsCount, "online")
         end
     end
 end
@@ -1645,6 +1980,226 @@ local function CreateCommands()
             AddMessage("=====================", "info")
         else
             AddMessage("Backend connection error", "error")
+        end
+    end
+    
+    local function CheckExtendedBackendStatus()
+        if not getgenv().Config.UseBackend then
+            AddMessage("Backend disabled", "warning")
+            return
+        end
+        
+        local stats = GetSystemStats()
+        if stats then
+            AddMessage("=== Extended Backend Status ===", "info")
+            AddMessage("Active jobs: " .. (stats.activeJobs or 0), "info")
+            AddMessage("Active receivers: " .. (stats.activeReceivers or 0), "info")
+            AddMessage("Total reservations: " .. (stats.totalReservations or 0), "info")
+            AddMessage("Total queues: " .. (stats.totalQueues or 0), "info")
+            AddMessage("Total queued users: " .. (stats.totalQueuedUsers or 0), "info")
+            
+            -- Новая статистика
+            AddMessage("Total trades: " .. (stats.totalTrades or 0), "success")
+            AddMessage("Total pets traded: " .. (stats.totalPetsTraded or 0), "success")
+            AddMessage("Total inventory pets: " .. (stats.totalInventoryPets or 0), "success")
+            AddMessage("Online receivers: " .. (stats.onlineReceivers or 0), "success")
+            AddMessage("Offline receivers: " .. (stats.offlineReceivers or 0), "warning")
+            
+            if stats.topReceivers and #stats.topReceivers > 0 then
+                AddMessage("Top receivers by trades:", "info")
+                for i, receiver in ipairs(stats.topReceivers) do
+                    AddMessage("  " .. i .. ". " .. receiver.username .. ": " .. receiver.trades .. " trades, " .. receiver.totalPets .. " pets", "info")
+                end
+            end
+            
+            if stats.statusBreakdown then
+                AddMessage("Status breakdown:", "info")
+                for status, count in pairs(stats.statusBreakdown) do
+                    AddMessage("  " .. status .. ": " .. count, "info")
+                end
+            end
+            
+            if stats.systemHealth then
+                AddMessage("System health:", "info")
+                AddMessage("  Uptime: " .. math.floor((stats.systemHealth.uptime or 0) / 3600) .. " hours", "info")
+                AddMessage("  Platform: " .. (stats.systemHealth.platform or "unknown"), "info")
+            end
+            
+            AddMessage("===============================", "info")
+        else
+            AddMessage("Failed to get extended backend status", "error")
+        end
+    end
+    
+    local function GetAccountInfo(username)
+        if not username or username == "" then
+            AddMessage("Usage: GetAccountInfo <username>", "warning")
+            return
+        end
+        
+        local account = GetAccountDetails(username)
+        if account then
+            AddMessage("=== Account Info: " .. username .. " ===", "info")
+            AddMessage("Status: " .. (account.status or "unknown"), "info")
+            AddMessage("Server ID: " .. (account.serverId or "N/A"), "info")
+            AddMessage("Job ID: " .. (account.jobId or "N/A"), "info")
+            AddMessage("Last seen: " .. (account.lastSeen and os.date("%Y-%m-%d %H:%M:%S", account.lastSeen / 1000) or "N/A"), "info")
+            AddMessage("Uptime: " .. (account.uptime and math.floor(account.uptime / 1000) or "N/A") .. " seconds", "info")
+            AddMessage("Is online: " .. (account.isOnline and "Yes" or "No"), "info")
+            
+            if account.queueInfo then
+                AddMessage("Queue info:", "info")
+                AddMessage("  Has reservation: " .. (account.queueInfo.hasReservation and "Yes" or "No"), "info")
+                AddMessage("  Queue length: " .. (account.queueInfo.queueLength or 0), "info")
+            end
+            
+            if account.preferences and #account.preferences > 0 then
+                AddMessage("Preferences (" .. #account.preferences .. "):", "info")
+                for i, pet in ipairs(account.preferences) do
+                    AddMessage("  " .. i .. ". " .. pet, "info")
+                end
+            end
+            
+            AddMessage("=================================", "info")
+        end
+    end
+    
+    local function UpdateAccountStatusCommand(username, status, reason)
+        if not username or username == "" then
+            AddMessage("Usage: UpdateAccountStatus <username> <status> [reason]", "warning")
+            AddMessage("Valid statuses: active, inactive, suspended, maintenance", "info")
+            return
+        end
+        
+        if not status or status == "" then
+            AddMessage("Usage: UpdateAccountStatus <username> <status> [reason]", "warning")
+            return
+        end
+        
+        local validStatuses = {"active", "inactive", "suspended", "maintenance"}
+        local isValidStatus = false
+        for _, validStatus in ipairs(validStatuses) do
+            if status == validStatus then
+                isValidStatus = true
+                break
+            end
+        end
+        
+        if not isValidStatus then
+            AddMessage("Invalid status. Valid statuses: " .. table.concat(validStatuses, ", "), "error")
+            return
+        end
+        
+        local success = UpdateAccountStatus(username, status, reason)
+        if success then
+            AddMessage("Account status updated successfully", "success")
+        end
+    end
+    
+    local function SearchAccountsCommand()
+        AddMessage("=== Account Search ===", "info")
+        AddMessage("Searching for accounts with current filters...", "info")
+        
+        local filters = {
+            status = "active",
+            limit = 10
+        }
+        
+        local result = SearchAccounts(filters)
+        if result and result.accounts then
+            AddMessage("Found " .. result.total .. " accounts (showing " .. #result.accounts .. ")", "info")
+            for i, account in ipairs(result.accounts) do
+                AddMessage(i .. ". " .. account.username .. " (status: " .. account.status .. ", queue: " .. account.queueLength .. ")", "info")
+            end
+        else
+            AddMessage("No accounts found or search failed", "warning")
+        end
+        
+        AddMessage("=====================", "info")
+    end
+    
+    local function CompleteJobCommand(jobId)
+        if not jobId or jobId == "" then
+            AddMessage("Usage: CompleteJob <jobId>", "warning")
+            return
+        end
+        
+        local success = CompleteJob(jobId, {
+            completedBy = LocalPlayer.Name,
+            completedAt = tick(),
+            reason = "manual_completion"
+        })
+        
+        if success then
+            AddMessage("Job " .. jobId .. " completed successfully", "success")
+        end
+    end
+    
+    local function GetQueueStatus(receiver)
+        if not receiver or receiver == "" then
+            AddMessage("Usage: GetQueueStatus <receiver>", "warning")
+            return
+        end
+        
+        if not getgenv().Config.UseBackend then
+            AddMessage("Backend disabled", "warning")
+            return
+        end
+        
+        local url = getgenv().Config.BackendURL .. "/api/queue/status?receiver=" .. receiver .. "&detailed=true"
+        local response = MakeHttpRequest(url, "GET")
+        
+        if response and response.success then
+            AddMessage("=== Queue Status: " .. receiver .. " ===", "info")
+            AddMessage("Queue length: " .. (response.queueLength or 0), "info")
+            AddMessage("Has reservation: " .. (response.hasReservation and "Yes" or "No"), "info")
+            
+            if response.current then
+                AddMessage("Current reservation:", "info")
+                AddMessage("  Sender: " .. response.current.sender, "info")
+                AddMessage("  Priority: " .. (response.current.priority or 1), "info")
+                AddMessage("  Age: " .. math.floor((tick() * 1000 - response.current.timestamp) / 1000) .. " seconds", "info")
+            end
+            
+            if response.queueDetails and #response.queueDetails > 0 then
+                AddMessage("Queue details:", "info")
+                for i, item in ipairs(response.queueDetails) do
+                    AddMessage("  " .. i .. ". " .. item.sender .. " (priority: " .. (item.priority or 1) .. ")", "info")
+                end
+            end
+            
+            AddMessage("===============================", "info")
+        else
+            AddMessage("Failed to get queue status for " .. receiver, "error")
+        end
+    end
+    
+    local function GetMyQueuePosition(receiver)
+        if not receiver or receiver == "" then
+            AddMessage("Usage: GetMyQueuePosition <receiver>", "warning")
+            return
+        end
+        
+        if not getgenv().Config.UseBackend then
+            AddMessage("Backend disabled", "warning")
+            return
+        end
+        
+        local url = getgenv().Config.BackendURL .. "/api/queue/status?receiver=" .. receiver .. "&sender=" .. LocalPlayer.Name
+        local response = MakeHttpRequest(url, "GET")
+        
+        if response and response.success then
+            if response.position then
+                if response.position == 1 then
+                    AddMessage("You have an active reservation for " .. receiver .. "!", "success")
+                else
+                    AddMessage("Your position in queue for " .. receiver .. ": " .. response.position, "info")
+                end
+            else
+                AddMessage("You are not in queue for " .. receiver, "info")
+            end
+        else
+            AddMessage("Failed to get queue position for " .. receiver, "error")
         end
     end
     
@@ -1814,6 +2369,85 @@ local function CreateCommands()
         end
     end
     
+    local function RecordTestTrade()
+        -- Тестовая запись трейда
+        if not getgenv().Config.UseBackend then
+            AddMessage("Backend disabled", "warning")
+            return
+        end
+        
+        local testReceiver = getgenv().Config.Recipients[1]
+        if testReceiver then
+            local success = RecordTrade(testReceiver, 3, game.JobId)
+            if success then
+                AddMessage("Test trade recorded successfully", "success")
+            else
+                AddMessage("Failed to record test trade", "error")
+            end
+        else
+            AddMessage("No recipients configured", "warning")
+        end
+    end
+    
+    local function UpdateMyStatus()
+        -- Обновление собственного статуса
+        if not getgenv().Config.UseBackend then
+            AddMessage("Backend disabled", "warning")
+            return
+        end
+        
+        local petsCount = GetPetsCountInInventory()
+        local success = UpdateReceiverStatus(petsCount, "online")
+        if success then
+            AddMessage("Status updated: " .. petsCount .. " pets, online", "success")
+        else
+            AddMessage("Failed to update status", "error")
+        end
+    end
+    
+    local function ForceRetryTeleport()
+        -- Принудительная повторная попытка телепорта
+        local isReceiver = false
+        for _, username in pairs(getgenv().Config.Recipients) do
+            if username == LocalPlayer.Name then
+                isReceiver = true
+                break
+            end
+        end
+        
+        if not isReceiver then
+            AddMessage("Отправители не используют повторные телепорты", "warning")
+            return
+        end
+        
+        if IsVipServer() then
+            AddMessage("Принудительная повторная попытка телепорта...", "warning")
+            RetryTeleportToNormalServer()
+        else
+            AddMessage("Текущий сервер не VIP, телепорт не нужен", "info")
+        end
+    end
+    
+    local function ResetTeleportSystem()
+        -- Сброс системы телепортов
+        getgenv().TeleportRetryCount = 0
+        getgenv().ExcludedServers = {}
+        getgenv().LastTeleportTime = 0
+        AddMessage("Система телепортов сброшена", "success")
+    end
+    
+    local function ShowTeleportStatus()
+        -- Показать статус системы телепортов
+        AddMessage("=== Статус системы телепортов ===", "info")
+        AddMessage("Попыток телепорта: " .. getgenv().TeleportRetryCount .. "/" .. getgenv().MaxTeleportRetries, "info")
+        AddMessage("Исключено серверов: " .. (function() local count = 0; for _ in pairs(getgenv().ExcludedServers) do count = count + 1 end; return count end)(), "info")
+        AddMessage("Кулдаун телепорта: " .. math.ceil((getgenv().TeleportCooldown - (tick() * 1000 - getgenv().LastTeleportTime)) / 1000) .. " сек", "info")
+        AddMessage("Текущий сервер VIP: " .. (IsVipServer() and "Да" or "Нет"), "info")
+        AddMessage("===============================", "info")
+    end
+    
+    -- ... existing code ...
+    
     -- Глобальные команды
     _G.ToggleAutoTrade = ToggleAutoTrade
     _G.SetTargetPlayer = SetTargetPlayer
@@ -1828,6 +2462,13 @@ local function CreateCommands()
     _G.ToggleSmartServerSearch = ToggleSmartServerSearch
     _G.PreviewBestServer = PreviewBestServer
     _G.CheckBackendStatus = CheckBackendStatus
+    _G.CheckExtendedBackendStatus = CheckExtendedBackendStatus
+    _G.GetAccountInfo = GetAccountInfo
+    _G.UpdateAccountStatusCommand = UpdateAccountStatusCommand
+    _G.SearchAccountsCommand = SearchAccountsCommand
+    _G.CompleteJobCommand = CompleteJobCommand
+    _G.GetQueueStatus = GetQueueStatus
+    _G.GetMyQueuePosition = GetMyQueuePosition
     _G.RegisterReceiver = RegisterReceiver
     _G.UnregisterReceiver = UnregisterReceiver
     _G.UpdateReceiver = UpdateReceiver
@@ -1838,6 +2479,11 @@ local function CreateCommands()
     _G.ToggleSkipTeleportIfNoPets = ToggleSkipTeleportIfNoPets
     _G.ToggleLeaveServerAfterTrade = ToggleLeaveServerAfterTrade
     _G.ForceLeaveServer = ForceLeaveServer
+    _G.RecordTestTrade = RecordTestTrade
+    _G.UpdateMyStatus = UpdateMyStatus
+    _G.ForceRetryTeleport = ForceRetryTeleport
+    _G.ResetTeleportSystem = ResetTeleportSystem
+    _G.ShowTeleportStatus = ShowTeleportStatus
     
     AddMessage("=== Авто трейд скрипт загружен ===", "success")
     
@@ -1862,6 +2508,12 @@ local function CreateCommands()
     for i, pet in pairs(getgenv().Config.PetsToTrade) do
         AddMessage(i .. ". " .. pet, "info")
     end
+    
+    -- Информация о новых командах
+    AddMessage("=== Новые команды ===", "info")
+    AddMessage("RecordTestTrade() - записать тестовый трейд", "info")
+    AddMessage("UpdateMyStatus() - обновить свой статус", "info")
+    AddMessage("CheckExtendedBackendStatus() - расширенная статистика", "info")
     
     -- Проверяем статус бекенда при запуске
     if getgenv().Config.UseBackend then
