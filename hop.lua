@@ -16,7 +16,7 @@ local myJobId    = game.JobId
 -- ===== ปรับค่าได้ =====
 local AUTO_HOP            = true      -- ครบ 5 คน -> เริ่มจับเวลา -> หาเซิร์ฟ 2–3
 local TARGET_FULL         = 5
-local WAIT_BEFORE_HOP     = 20        -- วินาที
+local WAIT_BEFORE_HOP     = 180        -- วินาที
 
 local MIN_PLAYERS         = 2         -- เป้าหมายต่ำสุด
 local MAX_PLAYERS         = 3         -- เป้าหมายสูงสุด
