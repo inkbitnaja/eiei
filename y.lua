@@ -40,12 +40,14 @@ getgenv().Config = {
         "Dedajkewal58607",
         "Patatmicou18408",
         "Grahlmixon4870",
+        "Supeengen519",
     },
     PetsToTrade = {
         "Lobster Thermidor",
         "French Fry Ferret",
         "Capybara",
         "Nihonzaru",
+        "Golden Goose",
     },
     RecipientPetMap = {
         ["Sienasees2679"] = {"Lobster Thermidor"},
@@ -88,6 +90,7 @@ getgenv().Config = {
         ["Dedajkewal58607"] = {"Nihonzaru"},
         ["Patatmicou18408"] = {"Nihonzaru"},
         ["Grahlmixon4870"] = {"Nihonzaru"},
+        ["Supeengen519"] = {"Golden Goose"},
     },
     Enabled = true,
     BackendURL = "http://45.150.128.26:8000",
