@@ -1,55 +1,39 @@
+-- Инициализация getgenv
+if not getgenv then
+    getgenv = function()
+        return _G
+    end
+end
+
 getgenv().Config = {
     Recipients = {
+        "Supeengen519",
+        "Okulaovitz4972",
+        "Mattegoda90168",
+        "Limbfeder1616",
+        "Ablerdulek30978",
+        "Tesarhasic07760",
+        "Attienauta37004",
+        "Manosbehne2761",
+        "Quossflock55440",
+        "Needrafal81596",
         "Sienasees2679",
         "Gamstoni12195",
         "Stutecrisi37076",
         "Gobahbatha49885",
         "Beebaff134",
-        "Babybiuso5926",
-        "Wiskdetty88442",
-        "Luyobruhn098",
-        "Benkatooma1220",
-        "Sanftkuver738",
         "Cuayabraho52063",
         "Rulzyerra845",
         "Sitchlinh683",
         "Ohorovince98806",
         "Ilansakal978",
-        "Piccaselva37999",
-        "Ehlenlewy9254",
-        "Uragabuthe0174",
-        "Reeefe645",
-        "Davidraus440",
-        "Sainskasie03919",
-        "Bethonie466",
-        "Boiddzul6288",
-        "Trumgoddu6900",
-        "Coffspehn87485",
-        "Cassidinos01849",
-        "Pechaureno1774",
-        "Begobel81430",
-        "Huipegamba1811",
-        "Oxnervanos67283",
-        "Velnotch7879",
-        "Durlilek61981",
-        "Junckponto4756",
-        "Barbetrefz29367",
-        "Vinupukaj845",
-        "Isheehebb186",
-        "Lorzsaier20069",
-        "Dedajkewal58607",
-        "Patatmicou18408",
-        "Grahlmixon4870",
-        "Supeengen519",
-        "Okulaovitz4972",
     },
     PetsToTrade = {
         "Lobster Thermidor",
         "French Fry Ferret",
-        "Capybara",
-        "Nihonzaru",
         "Golden Goose",
         "Golem",
+        "Spriggan"
     },
     RecipientPetMap = {
         ["Sienasees2679"] = {"Lobster Thermidor"},
@@ -57,43 +41,21 @@ getgenv().Config = {
         ["Stutecrisi37076"] = {"Lobster Thermidor"},
         ["Gobahbatha49885"] = {"Lobster Thermidor"},
         ["Beebaff134"] = {"Lobster Thermidor"},
-        ["Babybiuso5926"] = {"Lobster Thermidor"},
-        ["Wiskdetty88442"] = {"Lobster Thermidor"},
-        ["Luyobruhn098"] = {"Lobster Thermidor"},
-        ["Benkatooma1220"] = {"Lobster Thermidor"},
-        ["Sanftkuver738"] = {"Lobster Thermidor"},
         ["Cuayabraho52063"] = {"French Fry Ferret"},
         ["Rulzyerra845"] = {"French Fry Ferret"},
         ["Sitchlinh683"] = {"French Fry Ferret"},
         ["Ohorovince98806"] = {"French Fry Ferret"},
         ["Ilansakal978"] = {"French Fry Ferret"},
-        ["Piccaselva37999"] = {"French Fry Ferret"},
-        ["Ehlenlewy9254"] = {"French Fry Ferret"},
-        ["Uragabuthe0174"] = {"French Fry Ferret"},
-        ["Reeefe645"] = {"French Fry Ferret"},
-        ["Davidraus440"] = {"French Fry Ferret"},
-        ["Sainskasie03919"] = {"Capybara"},
-        ["Bethonie466"] = {"Capybara"},
-        ["Boiddzul6288"] = {"Capybara"},
-        ["Trumgoddu6900"] = {"Capybara"},
-        ["Coffspehn87485"] = {"Capybara"},
-        ["Cassidinos01849"] = {"Capybara"},
-        ["Pechaureno1774"] = {"Capybara"},
-        ["Begobel81430"] = {"Capybara"},
-        ["Huipegamba1811"] = {"Capybara"},
-        ["Oxnervanos67283"] = {"Capybara"},
-        ["Velnotch7879"] = {"Nihonzaru"},
-        ["Durlilek61981"] = {"Nihonzaru"},
-        ["Junckponto4756"] = {"Nihonzaru"},
-        ["Barbetrefz29367"] = {"Nihonzaru"},
-        ["Vinupukaj845"] = {"Nihonzaru"},
-        ["Isheehebb186"] = {"Nihonzaru"},
-        ["Lorzsaier20069"] = {"Nihonzaru"},
-        ["Dedajkewal58607"] = {"Nihonzaru"},
-        ["Patatmicou18408"] = {"Nihonzaru"},
-        ["Grahlmixon4870"] = {"Nihonzaru"},
         ["Supeengen519"] = {"Golden Goose"},
+        ["Limbfeder1616"] = {"Golden Goose"},
+        ["Mattegoda90168"] = {"Golden Goose"},
         ["Okulaovitz4972"] = {"Golem"},
+        ["Ablerdulek30978"] = {"Golem"},
+        ["Tesarhasic07760"] = {"Golem"},
+        ["Attienauta37004"] = {"Spriggan"},
+        ["Manosbehne2761"] = {"Spriggan"},
+        ["Quossflock55440"] = {"Spriggan"},
+        ["Needrafal81596"] = {"Golden Goose"},
     },
     Enabled = true,
     BackendURL = "http://45.150.128.26:8000",
@@ -797,6 +759,58 @@ local function ResetInventoryNotificationIfNormalized()
     end
 end
 
+-- Variable to track last used receiver
+getgenv().LastUsedReceiverIndex = getgenv().LastUsedReceiverIndex or 0
+
+-- Function to send Discord notification
+local function SendDiscordNotification(message, color)
+    if not getgenv().Config.DiscordNotifications or not getgenv().Config.DiscordWebhook or getgenv().Config.DiscordWebhook == "" then
+        return
+    end
+    
+    local embed = {
+        title = "Auto Trade Notification",
+        description = message,
+        color = color or 16711680, -- Red by default
+        timestamp = DateTime.now():ToIsoDateString(),
+        footer = {
+            text = "Auto Trade System"
+        }
+    }
+    
+    local data = {
+        embeds = {embed}
+    }
+    
+    local url = getgenv().Config.DiscordWebhook
+    local response = MakeHttpRequest(url, "POST", data)
+    
+    if response then
+        AddMessage("Discord notification sent", "success")
+    else
+        AddMessage("Failed to send Discord notification", "error")
+    end
+end
+
+
+-- Function to send inventory full notification
+local function SendInventoryFullNotification(username, petsCount, petsList)
+    if not getgenv().Config.DiscordNotifications then
+        return
+    end
+    
+    local message = "**Inventory is full!**\n"
+    message = message .. "**User:** " .. username .. "\n"
+    message = message .. "**Pets in inventory:** " .. petsCount .. "\n"
+    message = message .. "**Pets list:**\n"
+    
+    for i, petName in pairs(petsList) do
+        message = message .. i .. ". " .. petName .. "\n"
+    end
+    
+    SendDiscordNotification(message, 16711680) -- Red color
+end
+
 -- Function to check if receiver should be disabled due to inventory overflow
 local function ShouldDisableReceiverDueToOverflow()
     -- Reset notification if inventory is normalized
@@ -848,57 +862,6 @@ local function ShouldDisableReceiverDueToOverflow()
     end
     
     return false
-end
-
--- Variable to track last used receiver
-getgenv().LastUsedReceiverIndex = getgenv().LastUsedReceiverIndex or 0
-
--- Function to send Discord notification
-local function SendDiscordNotification(message, color)
-    if not getgenv().Config.DiscordNotifications or not getgenv().Config.DiscordWebhook or getgenv().Config.DiscordWebhook == "" then
-        return
-    end
-    
-    local embed = {
-        title = "Auto Trade Notification",
-        description = message,
-        color = color or 16711680, -- Red by default
-        timestamp = DateTime.now():ToIsoDateString(),
-        footer = {
-            text = "Auto Trade System"
-        }
-    }
-    
-    local data = {
-        embeds = {embed}
-    }
-    
-    local url = getgenv().Config.DiscordWebhook
-    local response = MakeHttpRequest(url, "POST", data)
-    
-    if response then
-        AddMessage("Discord notification sent", "success")
-    else
-        AddMessage("Failed to send Discord notification", "error")
-    end
-end
-
--- Function to send inventory full notification
-local function SendInventoryFullNotification(username, petsCount, petsList)
-    if not getgenv().Config.DiscordNotifications then
-        return
-    end
-    
-    local message = "**Inventory is full!**\n"
-    message = message .. "**User:** " .. username .. "\n"
-    message = message .. "**Pets in inventory:** " .. petsCount .. "\n"
-    message = message .. "**Pets list:**\n"
-    
-    for i, petName in pairs(petsList) do
-        message = message .. i .. ". " .. petName .. "\n"
-    end
-    
-    SendDiscordNotification(message, 16711680) -- Red color
 end
 
 -- Function to check receivers via backend
@@ -1143,6 +1106,38 @@ local function SendPet(petData, targetPlayer)
     return true
 end
 
+-- Функция для телепортации к receiver
+local function TeleportToReceiverPosition(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then
+        AddMessage("Receiver не найден для телепортации", "error")
+        return false
+    end
+    
+    local character = LocalPlayer.Character
+    if not character then
+        AddMessage("Персонаж не найден для телепортации", "error")
+        return false
+    end
+    
+    local targetPosition = targetPlayer.Character:GetPivot().Position
+    local teleportPosition = targetPosition + Vector3.new(0, 0, 3) -- Смещение на 3 единицы вперед
+    
+    AddMessage("Телепортация к receiver: " .. targetPlayer.Name .. " на позицию " .. tostring(teleportPosition), "info")
+    
+    local success, result = pcall(function()
+        character:PivotTo(CFrame.new(teleportPosition))
+    end)
+    
+    if success then
+        AddMessage("Телепортация к receiver выполнена успешно", "success")
+        task.wait(0.5) -- Ждем завершения телепортации
+        return true
+    else
+        AddMessage("Ошибка телепортации к receiver: " .. tostring(result), "error")
+        return false
+    end
+end
+
 -- Function to accept gift
 local function AcceptGift(giftId)
     local args = {
@@ -1296,6 +1291,242 @@ local function UpdateReceiverStatus()
     end
 end
 
+-- Функция для получения питомцев на ферме
+local function GetPetsOnFarm()
+    local petsOnFarm = {}
+    
+    -- Получаем все питомцы на ферме через GetFarm
+    local success, farmData = pcall(function()
+        -- Пытаемся использовать GetFarm модуль если доступен
+        local GetFarm = require(ReplicatedStorage.Modules.GetFarm)
+        return GetFarm(LocalPlayer)
+    end)
+    
+    if success and farmData and farmData.PetArea then
+        -- Ищем питомцев в области фермы
+        local petArea = farmData.PetArea
+        local character = LocalPlayer.Character
+        
+        if character then
+            -- Ищем питомцев в радиусе фермы
+            for _, obj in pairs(workspace:GetChildren()) do
+                if obj:IsA("Model") and obj:GetAttribute("PET_UUID") then
+                    -- Проверяем, находится ли питомец в области фермы
+                    local distance = (obj:GetPivot().Position - petArea.Position).Magnitude
+                    if distance <= 50 then -- Примерный радиус фермы
+                        local petData = GetPetData(obj)
+                        if petData then
+                            table.insert(petsOnFarm, petData)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return petsOnFarm
+end
+
+-- Функция для unequip питомца с фермы
+local function UnequipPetFromFarm(petData)
+    if not petData or not petData.UUID then
+        return false
+    end
+    
+    local PetsService = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("PetsService")
+    
+    local args = {
+        "UnequipPet",
+        petData.UUID
+    }
+    
+    local success, result = pcall(function()
+        PetsService:FireServer(unpack(args))
+    end)
+    
+    if success then
+        AddMessage("Unequip питомца с фермы: " .. petData.Name, "success")
+        return true
+    else
+        AddMessage("Ошибка unequip питомца с фермы: " .. tostring(result), "error")
+        return false
+    end
+end
+
+-- Функция для unequip всех питомцев с фермы
+local function UnequipAllPetsFromFarm()
+    local petsOnFarm = GetPetsOnFarm()
+    
+    if #petsOnFarm == 0 then
+        AddMessage("На ферме нет питомцев для unequip", "info")
+        return 0
+    end
+    
+    AddMessage("Найдено питомцев на ферме: " .. #petsOnFarm, "info")
+    
+    local unequippedCount = 0
+    
+    for _, petData in pairs(petsOnFarm) do
+        AddMessage("Unequip питомца: " .. petData.Name, "info")
+        
+        if UnequipPetFromFarm(petData) then
+            unequippedCount = unequippedCount + 1
+            task.wait(0.5) -- Задержка между unequip
+        end
+    end
+    
+    AddMessage("Unequip завершен. Обработано питомцев: " .. unequippedCount .. "/" .. #petsOnFarm, "success")
+    
+    -- Ждем немного, чтобы питомцы появились в инвентаре
+    if unequippedCount > 0 then
+        AddMessage("Ожидание появления питомцев в инвентаре...", "info")
+        task.wait(2)
+    end
+    
+    return unequippedCount
+end
+
+-- Функция для unfavorite питомца
+local function UnfavoritePet(petData)
+    if not petData or not petData.Tool then
+        return false
+    end
+    
+    local Favorite_Item = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("Favorite_Item")
+    
+    -- Проверяем, что питомец находится в рюкзаке (как в рабочем примере)
+    if petData.Tool.Parent ~= LocalPlayer.Backpack then
+        -- Если питомец в руках, сначала кладем его в рюкзак
+        if petData.Tool.Parent == LocalPlayer.Character then
+            petData.Tool.Parent = LocalPlayer.Backpack
+            task.wait(0.1) -- Небольшая задержка для синхронизации
+        end
+    end
+    
+    local args = {
+        petData.Tool
+    }
+    
+    local success, result = pcall(function()
+        Favorite_Item:FireServer(unpack(args))
+    end)
+    
+    if success then
+        AddMessage("Unfavorite питомца: " .. petData.Name, "success")
+        return true
+    else
+        AddMessage("Ошибка unfavorite питомца: " .. tostring(result), "error")
+        return false
+    end
+end
+
+
+-- Функция для unfavorite всех питомцев для трейда
+local function UnfavoriteAllTradePets()
+    local petsInInventory = GetPetsInInventory()
+    local unfavoritedCount = 0
+    
+    AddMessage("Unfavorite всех питомцев для трейда...", "info")
+    
+    for _, petData in pairs(petsInInventory) do
+        if IsPetInTradeList(petData.Name) then
+            AddMessage("Unfavorite питомца для трейда: " .. petData.Name, "info")
+            
+            -- Убеждаемся, что питомец в рюкзаке перед unfavorite
+            if petData.Tool.Parent == LocalPlayer.Character then
+                AddMessage("Перемещаем питомца в рюкзак: " .. petData.Name, "info")
+                petData.Tool.Parent = LocalPlayer.Backpack
+                task.wait(0.2) -- Ждем синхронизации
+            end
+            
+            if UnfavoritePet(petData) then
+                unfavoritedCount = unfavoritedCount + 1
+                task.wait(0.3) -- Увеличиваем задержку между unfavorite
+            end
+        end
+    end
+    
+    AddMessage("Unfavorite завершен. Обработано питомцев: " .. unfavoritedCount, "success")
+    return unfavoritedCount
+end
+
+-- Функция для проверки и unequip питомцев перед трейдом
+local function PreparePetsForTrade()
+    AddMessage("Подготовка питомцев для трейда...", "info")
+    
+    -- Сначала unequip питомцев с фермы
+    local unequippedCount = UnequipAllPetsFromFarm()
+    
+    if unequippedCount > 0 then
+        AddMessage("Питомцы с фермы unequip, ожидание обновления инвентаря...", "info")
+        task.wait(3) -- Дополнительное время для обновления инвентаря
+    end
+    
+    -- Проверяем обновленный инвентарь
+    local updatedInventory = GetPetsInInventory()
+    AddMessage("Обновленный инвентарь: " .. #updatedInventory .. " питомцев", "info")
+    
+    -- Теперь unfavorite всех питомцев для трейда
+    local unfavoritedCount = UnfavoriteAllTradePets()
+    
+    if unfavoritedCount > 0 then
+        AddMessage("Питомцы unfavorite, ожидание обновления статуса...", "info")
+        task.wait(1) -- Небольшая задержка для обновления статуса
+    end
+    
+    -- Финальная проверка инвентаря
+    local finalInventory = GetPetsInInventory()
+    AddMessage("Финальный инвентарь: " .. #finalInventory .. " питомцев", "info")
+    
+    return finalInventory
+end
+
+-- Функция для проверки статуса favorite питомцев
+local function CheckFavoriteStatus()
+    local petsInInventory = GetPetsInInventory()
+    local favoriteCount = 0
+    local unfavoriteCount = 0
+    
+    AddMessage("=== Проверка статуса Favorite питомцев ===", "info")
+    
+    for _, petData in pairs(petsInInventory) do
+        -- Проверяем, является ли питомец favorite (через атрибут или другие способы)
+        local isFavorite = false
+        
+        -- Попытка определить favorite статус через атрибуты
+        if petData.Tool:GetAttribute("Favorite") then
+            isFavorite = true
+        elseif petData.Tool:GetAttribute("IsFavorite") then
+            isFavorite = true
+        elseif petData.Tool:GetAttribute("Favorited") then
+            isFavorite = true
+        end
+        
+        if isFavorite then
+            favoriteCount = favoriteCount + 1
+            AddMessage("❤️ " .. petData.Name .. " - FAVORITE", "warning")
+        else
+            unfavoriteCount = unfavoriteCount + 1
+            AddMessage("💔 " .. petData.Name .. " - не favorite", "info")
+        end
+    end
+    
+    AddMessage("=== Результат ===", "info")
+    AddMessage("Favorite питомцев: " .. favoriteCount, "warning")
+    AddMessage("Не favorite питомцев: " .. unfavoriteCount, "info")
+    
+    if favoriteCount > 0 then
+        AddMessage("⚠️ ВНИМАНИЕ: Есть favorite питомцы!", "warning")
+        AddMessage("Рекомендуется выполнить unfavorite перед трейдом", "warning")
+    else
+        AddMessage("✅ Все питомцы не favorite - готовы к трейду", "success")
+    end
+    
+    AddMessage("=======================", "info")
+    
+    return favoriteCount, unfavoriteCount
+end
+
 -- Main auto trade function
 local function AutoTrade()
     if not getgenv().Config.Enabled then
@@ -1317,9 +1548,12 @@ local function AutoTrade()
         return
     end
     
-    -- Check if we have pets for trading
+    -- Подготавливаем питомцев для трейда (unequip с фермы)
+    local updatedInventory = PreparePetsForTrade()
+    
+    -- Check if we have pets for trading after preparation
     if not HasPetsForTrade() then
-        AddMessage("No pets for trading in inventory, waiting...", "warning")
+        AddMessage("No pets for trading in inventory after preparation, waiting...", "warning")
         return
     end
     
@@ -1409,6 +1643,7 @@ local function AutoTrade()
     end
     
     local sentCount = 0
+    local maxAttempts = 10 -- Максимальное количество попыток отправки одного питомца
     
     -- Create a copy of array for safe element removal
     local petsToSend = {}
@@ -1416,32 +1651,110 @@ local function AutoTrade()
         petsToSend[i] = petData
     end
     
-    for i = #petsToSend, 1, -1 do
-        local petData = petsToSend[i]
+    -- Основной цикл отправки питомцев
+    while #petsToSend > 0 do
+        local petsRemoved = 0
         
-        -- Check if pet still exists
-        if petData and petData.Tool and petData.Tool.Parent then
-            -- First equip the pet
-            if EquipPet(petData) then
-                task.wait(0.5) -- Small delay after equipping
+        for i = #petsToSend, 1, -1 do
+            local petData = petsToSend[i]
+            
+            -- Check if pet still exists
+            if petData and petData.Tool and petData.Tool.Parent then
+                AddMessage("Отправка питомца: " .. petData.Name .. " (UUID: " .. petData.UUID .. ")", "info")
                 
-                -- Then send
-                if SendPet(petData, targetPlayer or (reserved and FindPlayerByName(reserved.username))) then
-                    sentCount = sentCount + 1
-                    task.wait(1) -- Delay between sends
-                    
-                    -- Remove pet from list after successful send
-                    table.remove(petsToSend, i)
+                -- Сначала телепортируемся к receiver
+                if targetPlayer then
+                    if not TeleportToReceiverPosition(targetPlayer) then
+                        AddMessage("Не удалось телепортироваться к receiver, пропускаем питомца", "warning")
+                        -- Пропускаем этого питомца, переходим к следующему
+                        break
+                    end
                 end
+                
+                -- First equip the pet
+                if EquipPet(petData) then
+                    task.wait(0.5) -- Small delay after equipping
+                    
+                    -- Then send
+                    if SendPet(petData, targetPlayer or (reserved and FindPlayerByName(reserved.username))) then
+                        sentCount = sentCount + 1
+                        AddMessage("Питомец отправлен: " .. petData.Name, "success")
+                        
+                        -- Ждем и проверяем, исчез ли питомец из инвентаря
+                        local attempts = 0
+                        local petDisappeared = false
+                        
+                        while attempts < maxAttempts and not petDisappeared do
+                            task.wait(1) -- Ждем 1 секунду
+                            attempts = attempts + 1
+                            
+                            -- Проверяем, существует ли еще питомец
+                            if not petData.Tool or not petData.Tool.Parent then
+                                petDisappeared = true
+                                AddMessage("Питомец исчез из инвентаря: " .. petData.Name, "success")
+                                table.remove(petsToSend, i)
+                                petsRemoved = petsRemoved + 1
+                                break
+                            else
+                                AddMessage("Попытка " .. attempts .. ": питомец все еще в инвентаре, повторная отправка...", "warning")
+                                
+                                -- Повторная отправка
+                                if EquipPet(petData) then
+                                    task.wait(0.3)
+                                    SendPet(petData, targetPlayer or (reserved and FindPlayerByName(reserved.username)))
+                                end
+                            end
+                        end
+                        
+                        if not petDisappeared then
+                            AddMessage("Питомец не исчез после " .. maxAttempts .. " попыток: " .. petData.Name, "error")
+                            -- Оставляем питомца в списке для следующей итерации
+                        end
+                        
+                        task.wait(1) -- Delay between sends
+                    end
+                end
+            else
+                -- Remove pet from list if it no longer exists
+                AddMessage("Питомец больше не существует: " .. (petData and petData.Name or "Unknown"), "warning")
+                table.remove(petsToSend, i)
+                petsRemoved = petsRemoved + 1
             end
-        else
-            -- Remove pet from list if it no longer exists
-            table.remove(petsToSend, i)
         end
+        
+        -- Если за эту итерацию не удалили ни одного питомца, выходим из цикла
+        if petsRemoved == 0 then
+            AddMessage("Все питомцы остались в инвентаре, завершение цикла отправки", "warning")
+            break
+        end
+        
+        AddMessage("Осталось питомцев для отправки: " .. #petsToSend, "info")
+        task.wait(2) -- Пауза между итерациями
     end
     
     if sentCount > 0 then
-        AddMessage("Sent pets: " .. sentCount, "success")
+        AddMessage("Отправлено питомцев: " .. sentCount, "success")
+        
+        -- Проверяем, остались ли еще питомцы для трейда в инвентаре
+        local remainingPets = GetPetsInInventory()
+        local remainingTradePets = 0
+        
+        for _, petData in pairs(remainingPets) do
+            if IsPetInTradeList(petData.Name) then
+                remainingTradePets = remainingTradePets + 1
+            end
+        end
+        
+        if remainingTradePets > 0 then
+            AddMessage("⚠️ ВНИМАНИЕ: В инвентаре осталось " .. remainingTradePets .. " питомцев для трейда!", "warning")
+            AddMessage("Продолжаем отправку на текущем сервере...", "info")
+            
+            -- Не выходим с сервера, продолжаем трейд
+            return
+        else
+            AddMessage("✅ Все питомцы для трейда отправлены!", "success")
+        end
+        
         -- освободить резервацию, если была
         if reserved and reserved.username then
             ReleaseQueueReservation(reserved.username)
@@ -1464,6 +1777,8 @@ local function AutoTrade()
         elseif not isReceiver and not getgenv().Config.LeaveServerAfterTrade then
             AddMessage("Sender: trade completed, staying on server (setting disabled)", "info")
         end
+    else
+        AddMessage("Не удалось отправить ни одного питомца", "warning")
     end
 end
 
@@ -1868,6 +2183,131 @@ local function CreateCommands()
         end
     end
     
+    local function CheckPetsOnFarm()
+        AddMessage("=== Проверка питомцев на ферме ===", "info")
+        
+        local petsOnFarm = GetPetsOnFarm()
+        local petsCount = #petsOnFarm
+        
+        if petsCount == 0 then
+            AddMessage("На ферме нет питомцев", "info")
+        else
+            AddMessage("Найдено питомцев на ферме: " .. petsCount, "info")
+            
+            for i, petData in pairs(petsOnFarm) do
+                local baseName = GetBasePetName(petData.Name)
+                local isInTradeList = IsPetInTradeList(petData.Name)
+                
+                AddMessage(i .. ". " .. petData.Name .. " (основное имя: " .. baseName .. ")", "info")
+                
+                if isInTradeList then
+                    AddMessage("   ✅ В списке трейда", "success")
+                else
+                    AddMessage("   ❌ НЕ в списке трейда", "warning")
+                end
+            end
+        end
+        
+        AddMessage("=======================", "info")
+    end
+    
+    local function UnequipPetsFromFarm()
+        AddMessage("Принудительный unequip питомцев с фермы...", "info")
+        local unequippedCount = UnequipAllPetsFromFarm()
+        AddMessage("Unequip завершен. Обработано питомцев: " .. unequippedCount, "success")
+    end
+    
+    local function PreparePetsForTradeCommand()
+        AddMessage("Подготовка питомцев для трейда...", "info")
+        local updatedInventory = PreparePetsForTrade()
+        AddMessage("Подготовка завершена. Питомцев в инвентаре: " .. #updatedInventory, "success")
+    end
+    
+    local function CheckFavoriteStatusCommand()
+        CheckFavoriteStatus()
+    end
+    
+    local function UnfavoriteAllTradePetsCommand()
+        AddMessage("Принудительный unfavorite всех питомцев для трейда...", "info")
+        local unfavoritedCount = UnfavoriteAllTradePets()
+        AddMessage("Unfavorite завершен. Обработано питомцев: " .. unfavoritedCount, "success")
+    end
+    
+    local function UnfavoriteSpecificPet(petName)
+        local petsInInventory = GetPetsInInventory()
+        local foundPet = nil
+        
+        for _, petData in pairs(petsInInventory) do
+            if petData.Name:find(petName) then
+                foundPet = petData
+                break
+            end
+        end
+        
+        if foundPet then
+            AddMessage("Unfavorite конкретного питомца: " .. foundPet.Name, "info")
+            
+            -- Убеждаемся, что питомец в рюкзаке
+            if foundPet.Tool.Parent == LocalPlayer.Character then
+                AddMessage("Перемещаем питомца в рюкзак: " .. foundPet.Name, "info")
+                foundPet.Tool.Parent = LocalPlayer.Backpack
+                task.wait(0.2)
+            end
+            
+            if UnfavoritePet(foundPet) then
+                AddMessage("Питомец успешно unfavorite: " .. foundPet.Name, "success")
+            else
+                AddMessage("Ошибка unfavorite питомца: " .. foundPet.Name, "error")
+            end
+        else
+            AddMessage("Питомец не найден: " .. petName, "error")
+        end
+    end
+    
+    local function UnfavoriteAllPetsInBackpack()
+        local petsInInventory = GetPetsInInventory()
+        local unfavoritedCount = 0
+        
+        AddMessage("Принудительный unfavorite ВСЕХ питомцев в рюкзаке...", "warning")
+        
+        for _, petData in pairs(petsInInventory) do
+            AddMessage("Unfavorite питомца: " .. petData.Name, "info")
+            
+            -- Убеждаемся, что питомец в рюкзаке
+            if petData.Tool.Parent == LocalPlayer.Character then
+                AddMessage("Перемещаем питомца в рюкзак: " .. petData.Name, "info")
+                petData.Tool.Parent = LocalPlayer.Backpack
+                task.wait(0.2)
+            end
+            
+            if UnfavoritePet(petData) then
+                unfavoritedCount = unfavoritedCount + 1
+                task.wait(0.3)
+            end
+        end
+        
+        AddMessage("Unfavorite всех питомцев завершен. Обработано: " .. unfavoritedCount, "success")
+        return unfavoritedCount
+    end
+    
+    local function TeleportToReceiverCommand(username)
+        -- Находим receiver по имени
+        local targetPlayer = nil
+        for _, player in pairs(Players:GetPlayers()) do
+            if player.Name == username then
+                targetPlayer = player
+                break
+            end
+        end
+        
+        if targetPlayer then
+            AddMessage("Принудительная телепортация к receiver: " .. username, "info")
+            TeleportToReceiverPosition(targetPlayer)
+        else
+            AddMessage("Receiver не найден на сервере: " .. username, "error")
+        end
+    end
+    
     -- Глобальные команды
     _G.ToggleAutoTrade = ToggleAutoTrade
     _G.SetTargetPlayer = SetTargetPlayer
@@ -1892,6 +2332,14 @@ local function CreateCommands()
     _G.ToggleSkipTeleportIfNoPets = ToggleSkipTeleportIfNoPets
     _G.ToggleLeaveServerAfterTrade = ToggleLeaveServerAfterTrade
     _G.ForceLeaveServer = ForceLeaveServer
+    _G.CheckPetsOnFarm = CheckPetsOnFarm
+    _G.UnequipPetsFromFarm = UnequipPetsFromFarm
+    _G.PreparePetsForTradeCommand = PreparePetsForTradeCommand
+    _G.CheckFavoriteStatusCommand = CheckFavoriteStatusCommand
+    _G.UnfavoriteAllTradePetsCommand = UnfavoriteAllTradePetsCommand
+    _G.UnfavoriteSpecificPet = UnfavoriteSpecificPet
+    _G.UnfavoriteAllPetsInBackpack = UnfavoriteAllPetsInBackpack
+    _G.TeleportToReceiverCommand = TeleportToReceiverCommand
     
     AddMessage("=== Авто трейд скрипт загружен ===", "success")
     
@@ -1916,6 +2364,17 @@ local function CreateCommands()
     for i, pet in pairs(getgenv().Config.PetsToTrade) do
         AddMessage(i .. ". " .. pet, "info")
     end
+    
+    AddMessage("=== Новые команды для управления питомцами ===", "info")
+    AddMessage("CheckPetsOnFarm() - проверить питомцев на ферме", "info")
+    AddMessage("UnequipPetsFromFarm() - unequip всех питомцев с фермы", "info")
+    AddMessage("PreparePetsForTradeCommand() - подготовить питомцев для трейда", "info")
+    AddMessage("CheckFavoriteStatusCommand() - проверить favorite статус", "info")
+    AddMessage("UnfavoriteAllTradePetsCommand() - unfavorite всех питомцев для трейда", "info")
+    AddMessage("UnfavoriteSpecificPet('имя') - unfavorite конкретного питомца", "info")
+    AddMessage("UnfavoriteAllPetsInBackpack() - unfavorite ВСЕХ питомцев в рюкзаке", "warning")
+    AddMessage("TeleportToReceiverCommand('имя') - телепортация к receiver", "info")
+    AddMessage("=============================================", "info")
     
     -- Проверяем статус бекенда при запуске
     if getgenv().Config.UseBackend then
@@ -1951,6 +2410,14 @@ local function CreateCommands()
     -- Проверяем питомцев в инвентаре при запуске
     task.wait(2) -- Ждем загрузки персонажа
     CheckInventoryPets()
+    
+    -- Проверяем питомцев на ферме при запуске
+    task.wait(1) -- Небольшая задержка
+    CheckPetsOnFarm()
+    
+    -- Проверяем favorite статус питомцев при запуске
+    task.wait(1) -- Небольшая задержка
+    CheckFavoriteStatus()
 end
 
 CreateCommands() 
