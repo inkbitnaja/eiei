@@ -23,7 +23,7 @@ getgenv().Config = {
         "Sunny-Side Chicken",
         "Golem",
         "Golden Goose",
-        "French Fry Ferret"
+        "French Fry Ferret",
     },
     RecipientPetMap = {
         ["Tesarhasic07760"] = {"Golem"},
