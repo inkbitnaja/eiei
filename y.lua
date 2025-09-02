@@ -1,3 +1,4 @@
+task.wait(5)
 getgenv().Config = {
     Recipients = {
         "Cadleklank093",
@@ -1893,5 +1894,6 @@ local function CreateCommands()
     task.wait(2) -- Ждем загрузки персонажа
     CheckInventoryPets()
 end
+
 
 CreateCommands() 
