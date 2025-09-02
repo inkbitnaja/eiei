@@ -1,8 +1,10 @@
--- 🚀 Precise Low-Player Join (2–3 players) | API + Blind Hop Fallback
--- คุณสมบัติ:
--- 1) ค้นหาเซิร์ฟ 2–3 คนด้วย API (มี pagination + backoff กัน 429)
--- 2) ถ้า API ล้มเหลว: โหมด Blind Hop สุ่มเทเลฯ ต่อเนื่องจนเจอ 2–3 คน (พกสถานะด้วย TeleportData)
--- 3) กันวนกลับเซิร์ฟเดิมช่วงสั้น ๆ, จำกัดความถี่, คำสั่งควบคุมพร้อมใช้
+-- █████████████████████████████████████████████████████████████████
+-- Cluster-aware Ultra-Tight LowPop Hopper (2–3 players) for 15+ instances
+-- • รองรับ Leader/Follower: ลด 429, แม่นและไวมาก
+-- • Leader ใช้ API + backoff; Follower ใช้ Blind Hop ล้วน
+-- • Jitter เริ่ม, กันวนกลับเซิร์ฟเดิม (TTL), กันสแปม Teleport
+-- • คำสั่ง: /go /auto /ultra /normal /leader /follower /info /stop /help
+-- █████████████████████████████████████████████████████████████████
 
 local Players          = game:GetService("Players")
 local HttpService      = game:GetService("HttpService")
@@ -13,56 +15,80 @@ local player     = Players.LocalPlayer
 local placeId    = game.PlaceId
 local myJobId    = game.JobId
 
--- ===== ปรับค่าได้ =====
-local AUTO_HOP            = true      -- ครบ 5 คน -> เริ่มจับเวลา -> หาเซิร์ฟ 2–3
-local TARGET_FULL         = 5
-local WAIT_BEFORE_HOP     = 200        -- วินาที
+-- ======== PRESET สำหรับ “15 จอ” =========
+-- ตั้งค่านี้ที่หัวไฟล์ (สำคัญ)
+local API_ENABLED        = false   -- ✅ Leader = true (1–2 จอ), Follower = false (จออื่นทั้งหมด)
+local ULTRA_MODE         = true    -- โหมดตึง: >3 หรือ <2 คน → Hop ทันที
+local AUTO_HOP           = true
 
-local MIN_PLAYERS         = 2         -- เป้าหมายต่ำสุด
-local MAX_PLAYERS         = 3         -- เป้าหมายสูงสุด
+-- เป้าหมายคนในเซิร์ฟ
+local MIN_PLAYERS        = 2
+local MAX_PLAYERS        = 3
 
--- API Search
-local MAX_PAGES           = 12        -- ไล่หน้าไม่เกินเท่านี้
-local API_LIMIT           = 100       -- limit ต่อหน้า (Roblox API รองรับ 10/25/50/100)
-local API_BACKOFF_START   = 1.2       -- หน่วงเริ่มต้นเมื่อโดน 429/ล้มเหลว
-local API_BACKOFF_MAX     = 6         -- หน่วงสูงสุด
-local API_JITTER          = 0.35      -- สุ่มขยับเวลาเล็กน้อย ลดโอกาสชน 429
-local PAGE_DELAY          = 0.25      -- เวลาหน่วงระหว่างหน้า
+-- โหมดปกติ (เผื่อสลับ)
+local TARGET_FULL        = 5
+local WAIT_BEFORE_HOP    = 20
 
--- Blind Hop (สุ่มจนเจอ)
-local BLIND_MAX_ATTEMPTS  = 28        -- เทเลพอร์ตสุ่มสูงสุดกี่ครั้งต่อรอบ
-local BLIND_COOLDOWN      = 5.5       -- หน่วงระหว่างแต่ละรอบสุ่ม (กันสแปม)
-local REVISIT_TTL         = 120       -- ระยะเวลาจำเซิร์ฟเดิม (วินาที)
--- =======================
+-- Jitter/Teleport safety (สำคัญมากเวลารันหลายจอ)
+local STARTUP_JITTER_MAX = 3.0    -- ดีเลย์สุ่มตอนเริ่ม (วินาที) กันชนพร้อมกัน
+local MIN_TELEPORT_GAP   = 2.5    -- เวลาขั้นต่ำระหว่างการ Teleport แต่ละครั้ง
 
-local isHopping     = false
-local timeWhenFull  = nil
+-- กันวนกลับเซิร์ฟเดิม (จำ jobId ชั่วคราว)
+local REVISIT_TTL        = 120
 
--- บันทึก jobId ที่เพิ่งไปมา: {id -> expireAt}
+-- Blind Hop (Follower ใช้หนัก)
+local BLIND_MAX_ATTEMPTS = 40
+local BLIND_COOLDOWN     = 3.5
+
+-- API (ใช้เฉพาะ Leader)
+local MAX_PAGES          = 10
+local API_LIMIT          = 100
+local API_BACKOFF_START  = 1.2
+local API_BACKOFF_MAX    = 6
+local API_JITTER         = 0.35
+local PAGE_DELAY         = 0.2
+-- ========================================
+
+local isHopping, timeWhenFull, lastTeleport = false, nil, 0
 local visited = {}
 
-local function now() return os.time() end
-
+-- ===== Utils =====
 local function sysmsg(txt, rgb)
     pcall(function()
         StarterGui:SetCore("ChatMakeSystemMessage", {
-            Text = txt;
-            Color = rgb or Color3.fromRGB(200, 220, 255);
+            Text = txt; Color = rgb or Color3.fromRGB(210, 230, 255);
         })
     end)
 end
-
 local function pruneVisited()
-    local t = now()
+    local t = os.time()
     for id, exp in pairs(visited) do
         if exp <= t then visited[id] = nil end
     end
 end
+local function canTeleport()
+    return (tick() - lastTeleport) >= MIN_TELEPORT_GAP
+end
+local function doTeleportPlace(data)
+    if not canTeleport() then task.wait(MIN_TELEPORT_GAP - (tick() - lastTeleport)) end
+    lastTeleport = tick()
+    TeleportService:Teleport(placeId, Players.LocalPlayer, data)
+end
+local function doTeleportInstance(jobId)
+    if not canTeleport() then task.wait(MIN_TELEPORT_GAP - (tick() - lastTeleport)) end
+    lastTeleport = tick()
+    TeleportService:TeleportToPlaceInstance(placeId, jobId, Players.LocalPlayer)
+end
 
-print(("🚀 Precise Low-Player Join | เป้าหมาย %d–%d คน"):format(MIN_PLAYERS, MAX_PLAYERS))
-sysmsg("✅ เริ่มทำงาน (พิมพ์ /help เพื่อดูคำสั่ง)", Color3.fromRGB(120,255,120))
+-- Randomize starting offset per instance (กันออกตัวพร้อมกัน)
+math.randomseed(os.time() + player.UserId)
+task.wait(math.random() * STARTUP_JITTER_MAX)
 
--- ===== อ่าน TeleportData เพื่อสานต่อ Blind Hop เมื่อโหลดเข้ามาเซิร์ฟใหม่ =====
+sysmsg(("✅ Cluster Hopper | Mode:%s | API:%s | Target %d–%d")
+    :format(ULTRA_MODE and "ULTRA" or "NORMAL", API_ENABLED and "ON (Leader)" or "OFF (Follower)", MIN_PLAYERS, MAX_PLAYERS),
+    Color3.fromRGB(120,255,120))
+
+-- ====== สานต่อ Blind Hop ด้วย TeleportData ======
 task.defer(function()
     local join = player:GetJoinData()
     local td = join and join.TeleportData
@@ -71,44 +97,45 @@ task.defer(function()
         local maxA     = tonumber(td.maxAttempts) or BLIND_MAX_ATTEMPTS
         local minP     = tonumber(td.minP) or MIN_PLAYERS
         local maxP     = tonumber(td.maxP) or MAX_PLAYERS
+        local settle   = ULTRA_MODE and 1.5 or 3.0
 
-        task.delay(0.5, function()
-            local cnt = #Players:GetPlayers()
-            if cnt >= minP and cnt <= maxP then
-                sysmsg(("✅ พบเซิร์ฟ %d คน — หยุดไล่หา"):format(cnt), Color3.fromRGB(0,255,120))
+        task.delay(settle, function()
+            local c = #Players:GetPlayers()
+            if c >= minP and c <= maxP then
+                sysmsg(("🎯 เจอเซิร์ฟ %d คน — หยุดค้น"):format(c), Color3.fromRGB(0,255,120))
                 return
             end
             if attempts >= maxA then
-                sysmsg("⚠️ เกินจำนวนครั้งที่กำหนด หยุด Blind Hop", Color3.fromRGB(255,200,120))
+                sysmsg("⚠️ ถึงเพดาน Blind Hop แล้ว หยุดก่อน", Color3.fromRGB(255,200,120))
                 return
             end
-            sysmsg(("🔁 Blind Hop ต่อ (รอบ %d/%d) — คนปัจจุบัน %d"):format(attempts+1, maxA, cnt), Color3.fromRGB(255,215,120))
             task.wait(BLIND_COOLDOWN)
-            local data = {
-                mode = "acquire_lowpop",
-                attempts = attempts + 1,
-                maxAttempts = maxA,
-                minP = minP, maxP = maxP,
-            }
-            TeleportService:Teleport(placeId, player, data)
+            doTeleportPlace({
+                mode="acquire_lowpop", attempts=attempts+1, maxAttempts=maxA, minP=minP, maxP=maxP
+            })
         end)
+    else
+        if ULTRA_MODE then
+            task.delay(1.5, function()
+                local c = #Players:GetPlayers()
+                if c > MAX_PLAYERS or c < MIN_PLAYERS then
+                    doTeleportPlace({mode="acquire_lowpop", attempts=0, maxAttempts=BLIND_MAX_ATTEMPTS, minP=MIN_PLAYERS, maxP=MAX_PLAYERS})
+                end
+            end)
+        end
     end
 end)
 
--- ===== ดึงหน้าจาก API พร้อม backoff กัน 429 =====
+-- ===== API (Leader เท่านั้น) =====
 local function fetchPage(cursor, backoff)
     local base = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=%d"):format(placeId, API_LIMIT)
-    local url = cursor and (base .. "&cursor=" .. HttpService:UrlEncode(cursor)) or base
+    local url  = cursor and (base .. "&cursor=" .. HttpService:UrlEncode(cursor)) or base
 
-    local ok, resp = pcall(function()
-        return game:HttpGet(url, true)
-    end)
-
+    local ok, resp = pcall(function() return game:HttpGet(url, true) end)
     if not ok or not resp or resp == "" then
         task.wait(math.min(backoff, API_BACKOFF_MAX) + math.random() * API_JITTER)
         return nil, backoff * 1.6
     end
-
     local ok2, data = pcall(function() return HttpService:JSONDecode(resp) end)
     if not ok2 or not data or not data.data then
         task.wait(math.min(backoff, API_BACKOFF_MAX) + math.random() * API_JITTER)
@@ -117,8 +144,8 @@ local function fetchPage(cursor, backoff)
     return data, API_BACKOFF_START
 end
 
--- ===== หาเซิร์ฟ 2–3 คนด้วย API (pagination) =====
 local function findLowPlayersViaAPI()
+    if not API_ENABLED then return nil end
     pruneVisited()
     local cursor, pages, backoff = nil, 0, API_BACKOFF_START
     local best = nil
@@ -133,21 +160,16 @@ local function findLowPlayersViaAPI()
         end
 
         for _, srv in ipairs(data.data) do
-            local id        = srv.id
-            local playing   = tonumber(srv.playing) or 0
-            if  id ~= myJobId
-            and playing >= MIN_PLAYERS and playing <= MAX_PLAYERS
-            and not visited[id] then
+            local id = srv.id
+            local playing = tonumber(srv.playing) or 0
+            if id ~= myJobId and playing >= MIN_PLAYERS and playing <= MAX_PLAYERS and not visited[id] then
                 if (not best) or (playing < best.playing) then
-                    best = {id = id, playing = playing}
+                    best = {id=id, playing=playing}
                 end
             end
         end
 
-        if best then
-            return best.id
-        end
-
+        if best then return best.id end
         cursor = data.nextPageCursor
         if not cursor then break end
         task.wait(PAGE_DELAY + math.random() * API_JITTER)
@@ -155,76 +177,73 @@ local function findLowPlayersViaAPI()
     return nil
 end
 
--- ===== Blind Hop: สุ่มจนกว่าจะเจอ 2–3 คน (พกสถานะด้วย TeleportData) =====
+-- ===== Blind Hop (Follower & Fallback) =====
 local function blindHopUntilMatched()
-    local data = {
-        mode = "acquire_lowpop",
-        attempts = 0,
-        maxAttempts = BLIND_MAX_ATTEMPTS,
-        minP = MIN_PLAYERS, maxP = MAX_PLAYERS,
-    }
-    sysmsg("🎲 เข้าสู่โหมด Blind Hop จนกว่าจะเจอ 2–3 คน", Color3.fromRGB(255,215,120))
-    TeleportService:Teleport(placeId, player, data)
+    sysmsg(API_ENABLED and "🎲 API ไม่เจอ → Blind Hop" or "🎲 Blind Hop (Follower)", Color3.fromRGB(255,215,120))
+    doTeleportPlace({
+        mode="acquire_lowpop",
+        attempts=0, maxAttempts=BLIND_MAX_ATTEMPTS,
+        minP=MIN_PLAYERS, maxP=MAX_PLAYERS
+    })
 end
 
--- ===== ทำการ Hop =====
+-- ===== Hop หลัก =====
 local function doHop()
     if isHopping then return end
     isHopping = true
     sysmsg("⏩ กำลังหาเซิร์ฟ 2–3 คน...", Color3.fromRGB(255,215,120))
 
-    -- 1) ลองหาผ่าน API ก่อน
     local target = findLowPlayersViaAPI()
     if target then
-        visited[target] = now() + REVISIT_TTL
-        local ok = pcall(function()
-            TeleportService:TeleportToPlaceInstance(placeId, target, player)
-        end)
+        visited[target] = os.time() + REVISIT_TTL
+        local ok = pcall(function() doTeleportInstance(target) end)
         if ok then return end
-        -- ถ้าล้มเหลว -> ไปแผน 2
-    else
-        print("API หาไม่เจอ/ถูกบล็อก -> ใช้ Blind Hop")
     end
 
-    -- 2) Blind Hop จนกว่าจะเจอ
     blindHopUntilMatched()
     isHopping = false
 end
 
--- ===== Loop หลัก: ครบ 5 คน -> รอ 20 วิ -> Hop =====
+-- ===== Loop โหมด =====
 task.spawn(function()
     while true do
-        task.wait(5)
+        task.wait(ULTRA_MODE and 3 or 5)
         if not AUTO_HOP or isHopping then continue end
 
         local c = #Players:GetPlayers()
-        if c >= TARGET_FULL then
-            if not timeWhenFull then
-                timeWhenFull = tick()
-                sysmsg(("⏰ ครบ %d คน — จะ Hop ใน %d วิ"):format(TARGET_FULL, WAIT_BEFORE_HOP), Color3.fromRGB(255,200,120))
-            else
-                local left = WAIT_BEFORE_HOP - (tick() - timeWhenFull)
-                if left <= 0 then
-                    timeWhenFull = nil
-                    doHop()
-                end
+        if ULTRA_MODE then
+            if c > MAX_PLAYERS or c < MIN_PLAYERS then
+                doHop()
             end
         else
-            timeWhenFull = nil
+            if c >= TARGET_FULL then
+                if not timeWhenFull then
+                    timeWhenFull = tick()
+                    sysmsg(("⏰ ครบ %d คน — จะ Hop ใน %d วิ"):format(TARGET_FULL, WAIT_BEFORE_HOP), Color3.fromRGB(255,200,120))
+                else
+                    local left = WAIT_BEFORE_HOP - (tick() - timeWhenFull)
+                    if left <= 0 then
+                        timeWhenFull = nil
+                        doHop()
+                    end
+                end
+            else
+                timeWhenFull = nil
+            end
         end
     end
 end)
 
--- ===== Log เข้า/ออก =====
+-- ===== Log เข้า/ออก (ชม.) =====
 Players.PlayerAdded:Connect(function(plr)
     print(("➕ %s เข้ามา (รวม %d)"):format(plr.Name, #Players:GetPlayers()))
 end)
 Players.PlayerRemoving:Connect(function(plr)
-    task.wait(0.4)
+    task.wait(0.35)
     print(("➖ %s ออก (เหลือ %d)"):format(plr.Name, #Players:GetPlayers()))
 end)
 
--- ===== คำสั่ง =====
+-- ===== Chat Commands =====
 player.Chatted:Connect(function(msg)
     msg = msg:lower()
     if msg == "/go" then
@@ -234,18 +253,30 @@ player.Chatted:Connect(function(msg)
         timeWhenFull = nil
         sysmsg(AUTO_HOP and "✅ Auto: ON" or "❌ Auto: OFF",
             AUTO_HOP and Color3.fromRGB(0,255,120) or Color3.fromRGB(255,120,120))
+    elseif msg == "/ultra" then
+        ULTRA_MODE = true; timeWhenFull = nil
+        sysmsg("💥 Ultra Mode: ON", Color3.fromRGB(0,255,160))
+    elseif msg == "/normal" then
+        ULTRA_MODE = false
+        sysmsg("🧩 Normal Mode: ON", Color3.fromRGB(120,200,255))
+    elseif msg == "/leader" then
+        API_ENABLED = true
+        sysmsg("👑 This instance: LEADER (API ON)", Color3.fromRGB(255,230,120))
+    elseif msg == "/follower" then
+        API_ENABLED = false
+        sysmsg("👣 This instance: FOLLOWER (API OFF)", Color3.fromRGB(180,220,255))
     elseif msg == "/info" then
         local c = #Players:GetPlayers()
-        sysmsg(("ℹ️ Players: %d | Target %d | Auto:%s"):format(c, TARGET_FULL, AUTO_HOP and "ON" or "OFF"))
+        sysmsg(("ℹ️ %d คน | Mode:%s | API:%s | Auto:%s"):format(
+            c, ULTRA_MODE and "ULTRA" or "NORMAL", API_ENABLED and "ON" or "OFF", AUTO_HOP and "ON" or "OFF"))
     elseif msg == "/stop" then
         AUTO_HOP, isHopping, timeWhenFull = false, false, nil
-        sysmsg("⏹️ หยุดการทำงานแล้ว", Color3.fromRGB(255,200,120))
+        sysmsg("⛔ หยุดระบบแล้ว", Color3.fromRGB(255,180,120))
     elseif msg == "/help" then
-        sysmsg("คำสั่ง: /go /auto /info /stop /help")
+        sysmsg("คำสั่ง: /go /auto /ultra /normal /leader /follower /info /stop /help")
     end
 end)
 
--- ===== แจ้งพร้อม =====
 task.delay(1, function()
-    sysmsg("✅ พร้อมใช้งาน (เป้าหมาย 2–3 คน)", Color3.fromRGB(120,255,120))
+    sysmsg("✅ พร้อมใช้งานสำหรับ 15 จอ (ตั้ง Leader 1–2 จอพอ)", Color3.fromRGB(120,255,120))
 end)
