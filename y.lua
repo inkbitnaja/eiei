@@ -4,48 +4,43 @@ repeat task.wait() until game.Players
 repeat task.wait() until game.Players.LocalPlayer
 
 -- ✅ รอเพิ่มอีก 20 วินาที
-task.wait(20)
+task.wait(30)
 
 -- ✅ คำสั่งที่จะรันหลัง 20 วิ
 print("เริ่มรันสคริปต์แล้ว!")
 -- ใส่โค้ดหลักของคุณตรงนี้
 getgenv().Config = {
     Recipients = {
-        "Cadleklank093",
-        "Halmidonte035",
-        "Toarodio504",
-        "Mannswale412",
-        "Tostiooi8192",
-        "Sekohahl13146",
-        "Mireegoold4574",
-        "Currykeeve15181",
-        "Samzpatts388",
-        "Bushyergi789",
-        "Rohasamas308",
-        "Twitekumai7665",
-        "Myrckavci223",
-        "Ruysclagg71894",
-        "Gotocreel590"
+        "Weasttiong34011",
+        "Pifkomanik6547",
+        "Duelpuha375",
+        "Vittistabe437",
+        "Newerabawi317",
+        "Hongacibik86218",
+        "Tynchsamer179",
+        "Trixswaw444",
+        "Sofoweist814",
+        "Linggkurko82642",
+        "Bhaitahan7207"
+        "Kunauroni7427",
     },
     PetsToTrade = {
-        "Golem",
+        "Cockatrice",
+        "Red Fox",
     },
     RecipientPetMap = {
-        ["Cadleklank093"] = {"Golem"},
-        ["Halmidonte035"] = {"Golem"},
-        ["Toarodio504"] = {"Golem"},
-        ["Mannswale412"] = {"Golem"},
-        ["Sekohahl13146"] = {"Golem"},
-        ["Jureuyeda166"] = {"Golem"},
-        ["Mireegoold4574"] = {"Golem"},
-        ["Currykeeve15181"] = {"Golem"},
-        ["Samzpatts388"] = {"Golem"},
-        ["Bushyergi789"] = {"Golem"},
-        ["Rohasamas308"] = {"Golem"},
-        ["Twitekumai7665"] = {"Golem"},
-        ["Myrckavci223"] = {"Golem"},
-        ["Ruysclagg71894"] = {"Golem"},
-        ["Gotocreel590"] = {"Golem"},
+        ["Weasttiong34011"] = {"Red Fox"},
+        ["Pifkomanik6547"] = {"Red Fox"},
+        ["Duelpuha375"] = {"Red Fox"},
+        ["Vittistabe437"] = {"Cockatrice"},
+        ["Newerabawi317"] = {"Cockatrice"},
+        ["Hongacibik86218"] = {"Cockatrice"},
+        ["Tynchsamer179"] = {"Cockatrice"},
+        ["Trixswaw444"] = {"Cockatrice"},
+        ["Sofoweist814"] = {"Cockatrice"},
+        ["Kunauroni7427"] = {"Cockatrice"},
+        ["Linggkurko82642"] = {"Cockatrice"},
+        ["Bhaitahan7207"] = {"Cockatrice"},
     },
     Enabled = true,
     BackendURL = "http://45.150.128.26:8000",
@@ -1905,11 +1900,4 @@ local function CreateCommands()
     CheckInventoryPets()
 end
 
-
 CreateCommands() 
-
-
-
-
-
-
