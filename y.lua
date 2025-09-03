@@ -1,14 +1,7 @@
--- ✅ รอจนกว่าเกมโหลดเสร็จ
 repeat task.wait() until game:IsLoaded()
 repeat task.wait() until game.Players
 repeat task.wait() until game.Players.LocalPlayer
-
--- ✅ รอเพิ่มอีก 20 วินาที
 task.wait(30)
-
--- ✅ คำสั่งที่จะรันหลัง 20 วิ
-print("เริ่มรันสคริปต์แล้ว!")
--- ใส่โค้ดหลักของคุณตรงนี้
 getgenv().Config = {
     Recipients = {
         "Weasttiong34011",
@@ -21,8 +14,8 @@ getgenv().Config = {
         "Trixswaw444",
         "Sofoweist814",
         "Linggkurko82642",
-        "Bhaitahan7207"
-        "Kunauroni7427",
+        "Bhaitahan7207",
+        "Kunauroni7427"
     },
     PetsToTrade = {
         "Cockatrice",
