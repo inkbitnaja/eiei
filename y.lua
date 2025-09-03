@@ -1,4 +1,4 @@
-task.wait(20)
+task.wait(40)
 getgenv().Config = {
     Recipients = {
         "Cadleklank093",
@@ -1897,4 +1897,5 @@ end
 
 
 CreateCommands() 
+
 
