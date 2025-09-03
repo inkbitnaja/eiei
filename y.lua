@@ -1,4 +1,14 @@
-task.wait(40)
+-- ✅ รอจนกว่าเกมโหลดเสร็จ
+repeat task.wait() until game:IsLoaded()
+repeat task.wait() until game.Players
+repeat task.wait() until game.Players.LocalPlayer
+
+-- ✅ รอเพิ่มอีก 20 วินาที
+task.wait(20)
+
+-- ✅ คำสั่งที่จะรันหลัง 20 วิ
+print("เริ่มรันสคริปต์แล้ว!")
+-- ใส่โค้ดหลักของคุณตรงนี้
 getgenv().Config = {
     Recipients = {
         "Cadleklank093",
@@ -1897,5 +1907,6 @@ end
 
 
 CreateCommands() 
+
 
 
